@@ -1,1 +1,12 @@
-<Solution />
+<Solution>
+  <Project Path="StockTracker.Shared.Contracts/StockTracker.Shared.Contracts.csproj" />
+  <Project Path="StockTracker.Billing/StockTracker.Billing.csproj" />
+  <Project Path="StockTracker.BrandDetection/StockTracker.BrandDetection.csproj" />
+  <Project Path="StockTracker.Gateway/StockTracker.Gateway.csproj" />
+  <Project Path="StockTracker.Identity/StockTracker.Identity.csproj" />
+  <Project Path="StockTracker.Notification/StockTracker.Notification.csproj" />
+  <Project Path="StockTracker.Product/StockTracker.Product.csproj" />
+  <Project Path="StockTracker.SearchOrchestrator/StockTracker.SearchOrchestrator.csproj" />
+  <Project Path="StockTracker.StoreReference/StockTracker.StoreReference.csproj" />
+  <Project Path="StockTracker.Subscription/StockTracker.Subscription.csproj" />
+</Solution>

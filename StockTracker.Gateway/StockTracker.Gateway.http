@@ -1,0 +1,6 @@
+@StockTracker.Gateway_HostAddress = http://localhost:5217
+
+GET {{StockTracker.Gateway_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

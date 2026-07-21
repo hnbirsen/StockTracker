@@ -1,0 +1,6 @@
+@StockTracker.Subscription_HostAddress = http://localhost:5252
+
+GET {{StockTracker.Subscription_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

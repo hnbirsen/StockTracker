@@ -1,0 +1,6 @@
+@StockTracker.SearchOrchestrator_HostAddress = http://localhost:5232
+
+GET {{StockTracker.SearchOrchestrator_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

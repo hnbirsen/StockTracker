@@ -1,0 +1,6 @@
+@StockTracker.BrandDetection_HostAddress = http://localhost:5191
+
+GET {{StockTracker.BrandDetection_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
