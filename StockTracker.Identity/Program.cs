@@ -3,8 +3,17 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 
 // db connection
+var connectionString = Environment.GetEnvironmentVariable("IDENTITY_DB_CONNECTION")
+    ?? builder.Configuration.GetConnectionString("IdentityDb")
+    ?? throw new InvalidOperationException("Connection string 'IdentityDb' not found.");
+
 builder.Services.AddDbContext<IdentityDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("IdentityDb")));
+    options.UseNpgsql(connectionString));
+
+// configure jwt settings
+var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
+    ?? builder.Configuration["JwtSettings:SecretKey"]
+    ?? throw new InvalidOperationException("JWT secret key not found.");
 
 // services
 builder.Services.AddScoped<IAuthService, AuthService>();
