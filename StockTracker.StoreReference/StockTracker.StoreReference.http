@@ -1,6 +1,0 @@
-@StockTracker.StoreReference_HostAddress = http://localhost:5197
-
-GET {{StockTracker.StoreReference_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

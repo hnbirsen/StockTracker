@@ -1,41 +1,38 @@
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// YARP Reverse Proxy'yi konfigüre et
+// appsettings.json'daki "ReverseProxy" bölümünü oku
+builder.Services.AddReverseProxy()
+    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
+
+// CORS (tarayıcıdan çağrı yapabilmek için)
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy
+            .AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader();
+    });
+});
+
+// Health checks (servislerin sağlıklı olup olmadığını kontrol etmek için)
+builder.Services.AddHealthChecks();
+
+// Logging ekle (hata ayıklama için)
+builder.Logging.AddConsole();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
+// CORS'u aktifleştir
+app.UseCors("AllowAll");
 
-app.UseHttpsRedirection();
+// Health check endpoint'ini ekle (http://localhost:8000/health/gateway)
+app.MapHealthChecks("/health/gateway");
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+// YARP reverse proxy'yi akış içine ekle
+app.MapReverseProxy();
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
-
-app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+// Çalıştır (varsayılan port 8000)
+app.Run("http://0.0.0.0:8000");

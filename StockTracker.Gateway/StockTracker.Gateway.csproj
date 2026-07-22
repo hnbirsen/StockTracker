@@ -1,17 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
-
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0"/>
   </ItemGroup>
-
   <ItemGroup>
-    <ProjectReference Include="../StockTracker.Shared.Contracts/StockTracker.Shared.Contracts.csproj" />
+    <ProjectReference Include="../StockTracker.Shared.Contracts/StockTracker.Shared.Contracts.csproj"/>
   </ItemGroup>
-
 </Project>

@@ -1,6 +1,0 @@
-@StockTracker.Billing_HostAddress = http://localhost:5040
-
-GET {{StockTracker.Billing_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
