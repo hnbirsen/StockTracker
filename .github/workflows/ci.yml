@@ -1,0 +1,56 @@
+name: CI — Build & Test
+
+# Ne zaman çalışsın:
+# - main branch'e push yapıldığında
+# - herhangi bir branch'ten main'e PR açıldığında
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Repo'yu indir
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. .NET SDK'yı kur
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      # 3. Bağımlılıkları yükle (NuGet paketleri)
+      - name: Restore dependencies
+        run: dotnet restore StockTracker.sln
+
+      # 4. Solution'ı build et
+      - name: Build
+        run: dotnet build StockTracker.sln --no-restore --configuration Release
+
+      # 5. Testleri çalıştır (test projesi yoksa bu adım uyarı verir ama hata vermez)
+      - name: Test
+        run: dotnet test StockTracker.sln --no-build --configuration Release --verbosity normal
+
+  # Docker image build kontrolü
+  docker-build:
+    name: Docker Build Check
+    runs-on: ubuntu-latest
+    needs: build-and-test  # Önce build-and-test başarılı olmalı
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Docker Compose'un geçerli bir YAML olup olmadığını kontrol et
+      - name: Validate docker-compose.yml
+        run: docker compose config
+
+      # Gateway Dockerfile build testi (Dockerfile'lar oluşturulunca açılacak)
+      # - name: Build Gateway Docker image
+      #   run: docker build -t stocktracker-gateway ./StockTracker.Gateway
