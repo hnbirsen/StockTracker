@@ -16,7 +16,7 @@ jobs:
 
     steps:
       # 1. Repo'yu indir
-      - name: Checkout code
+      - name: Checkout code 
         uses: actions/checkout@v4
 
       # 2. .NET SDK'yı kur
