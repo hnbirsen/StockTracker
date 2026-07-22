@@ -27,15 +27,15 @@ jobs:
 
       # 3. Bağımlılıkları yükle (NuGet paketleri)
       - name: Restore dependencies
-        run: dotnet restore StockTracker.sln
+        run: dotnet restore StockTracker.slnx
 
       # 4. Solution'ı build et
       - name: Build
-        run: dotnet build StockTracker.sln --no-restore --configuration Release
+        run: dotnet build StockTracker.slnx --no-restore --configuration Release
 
       # 5. Testleri çalıştır (test projesi yoksa bu adım uyarı verir ama hata vermez)
       - name: Test
-        run: dotnet test StockTracker.sln --no-build --configuration Release --verbosity normal
+        run: dotnet test StockTracker.slnx --no-build --configuration Release --verbosity normal
 
   # Docker image build kontrolü
   docker-build:
