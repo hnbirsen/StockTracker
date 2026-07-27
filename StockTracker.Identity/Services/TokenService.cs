@@ -67,17 +67,32 @@ public class TokenService : ITokenService
         string RefreshTokenExpiryDays
     );
 
-    private JwtSettings BindJwtSettings()
-    {
-        var jwtSettings = _configuration.GetSection("JwtSettings");
-        _jwtSettings = jwtSettings.Get<JwtSettings>() ?? throw new InvalidOperationException("JWT settings are not configured.");
-        return _jwtSettings;
-    }
-
     public JwtSettings GetJwtSettings()
     {
-        if (_jwtSettings == null)
-            return BindJwtSettings();
+        if (_jwtSettings != null)
+            return _jwtSettings;
+
+        // Sensitive veriler env'dan
+        var secretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") 
+            ?? throw new InvalidOperationException("JWT_SECRET_KEY environment variable not set.");
+        var issuer = Environment.GetEnvironmentVariable("JWT_ISSUER") 
+            ?? throw new InvalidOperationException("JWT_ISSUER environment variable not set.");
+        var audience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") 
+            ?? throw new InvalidOperationException("JWT_AUDIENCE environment variable not set.");
+
+        // Configuration değerleri appsettings.json'dan
+        var accessTokenExpiry = _configuration["JwtSettings:AccessTokenExpiryMinutes"]
+            ?? throw new InvalidOperationException("JWT access token expiry is not configured.");
+        var refreshTokenExpiry = _configuration["JwtSettings:RefreshTokenExpiryDays"]
+            ?? throw new InvalidOperationException("JWT refresh token expiry is not configured.");
+
+        _jwtSettings = new JwtSettings(
+            SecretKey: secretKey,
+            Issuer: issuer,
+            Audience: audience,
+            AccessTokenExpiryMinutes: accessTokenExpiry,
+            RefreshTokenExpiryDays: refreshTokenExpiry
+        );
 
         return _jwtSettings;
     }

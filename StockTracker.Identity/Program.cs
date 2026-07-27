@@ -1,5 +1,26 @@
 using Microsoft.EntityFrameworkCore;
 
+var root = Directory.GetCurrentDirectory();
+while (!File.Exists(Path.Combine(root, ".env")) && Directory.GetParent(root) != null)
+{
+    root = Directory.GetParent(root)!.FullName;
+}
+
+var envPath = Path.Combine(root, ".env");
+if (File.Exists(envPath))
+{
+    var lines = File.ReadAllLines(envPath);
+    foreach (var line in lines)
+    {
+        if (string.IsNullOrEmpty(line) || line.StartsWith("#")) continue;
+        var parts = line.Split('=', 2);
+        if (parts.Length == 2)
+        {
+            Environment.SetEnvironmentVariable(parts[0].Trim(), parts[1].Trim());
+        }
+    }
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // db connection
