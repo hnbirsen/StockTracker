@@ -14,12 +14,12 @@ public interface ITokenService
 public class TokenService : ITokenService
 {
     private readonly IConfiguration _configuration;
-    private JwtSettings _jwtSettings;
+    private readonly JwtSettings _jwtSettings;
 
     public TokenService(IConfiguration configuration)
     {
         _configuration = configuration;
-        GetJwtSettings();
+        _jwtSettings = BuildJwtSettings();
     }
 
     public string GenerateAccessToken(User user)
@@ -69,9 +69,11 @@ public class TokenService : ITokenService
 
     public JwtSettings GetJwtSettings()
     {
-        if (_jwtSettings != null)
-            return _jwtSettings;
+        return _jwtSettings;
+    }
 
+    private JwtSettings BuildJwtSettings()
+    {
         // Sensitive veriler env'dan
         var secretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") 
             ?? throw new InvalidOperationException("JWT_SECRET_KEY environment variable not set.");
@@ -86,14 +88,12 @@ public class TokenService : ITokenService
         var refreshTokenExpiry = _configuration["JwtSettings:RefreshTokenExpiryDays"]
             ?? throw new InvalidOperationException("JWT refresh token expiry is not configured.");
 
-        _jwtSettings = new JwtSettings(
+        return new JwtSettings(
             SecretKey: secretKey,
             Issuer: issuer,
             Audience: audience,
             AccessTokenExpiryMinutes: accessTokenExpiry,
             RefreshTokenExpiryDays: refreshTokenExpiry
         );
-
-        return _jwtSettings;
     }
 }
