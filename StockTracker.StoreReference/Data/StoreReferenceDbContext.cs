@@ -21,9 +21,12 @@ public class StoreReferenceDbContext : DbContext
             entity.Property(s => s.BrandSpecificStoreId).IsRequired().HasMaxLength(100);
         });
 
-        // Bershka mağaza listesi — manuel toplanmış seed data (Faz 2.3).
-        // BrandSpecificStoreId değerleri yer tutucudur; gerçek scraper (Faz 2.4) devreye girdiğinde
-        // Bershka'nın kendi site/API'sinden gelen gerçek mağaza kodlarıyla güncellenmelidir.
+        // Bershka mağaza listesi (Faz 2.3, Faz 2.4'te gerçek verilerle güncellendi).
+        // BrandSpecificStoreId artık Bershka'nın kendi mağaza bulucu API'sinden (bkz. .claude/ARCHITECTURE.md
+        // > Bershka Scraper > Mağaza bulucu) dönen GERÇEK physicalStoreId değerleri — scraper'ın stok API'sine
+        // doğrudan bu ID'lerle sorgu atması gerekiyor. Her mağaza, ilgili il/ilçeye en yakın (Kadıköy için
+        // Kozyatağı — Kadıköy ilçesi sınırları içinde bir mahalle; Şişli/Bornova için isim birebir eşleşiyor;
+        // Çankaya için adreste "ÇANKAYA" geçen mağaza) gerçek Bershka mağazasıdır.
         var bershkaId = Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
         var seedCreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
@@ -35,8 +38,8 @@ public class StoreReferenceDbContext : DbContext
                 BrandName = "Bershka",
                 City = "Istanbul",
                 District = "Kadikoy",
-                StoreName = "Bershka Kadikoy",
-                BrandSpecificStoreId = "BSK-IST-KDK-01",
+                StoreName = "City's Kozyatağı",
+                BrandSpecificStoreId = "16884",
                 IsActive = true,
                 CreatedAt = seedCreatedAt
             },
@@ -47,8 +50,8 @@ public class StoreReferenceDbContext : DbContext
                 BrandName = "Bershka",
                 City = "Istanbul",
                 District = "Sisli",
-                StoreName = "Bershka Cevahir AVM",
-                BrandSpecificStoreId = "BSK-IST-SSL-01",
+                StoreName = "Cevahir AVM",
+                BrandSpecificStoreId = "8359",
                 IsActive = true,
                 CreatedAt = seedCreatedAt
             },
@@ -59,8 +62,8 @@ public class StoreReferenceDbContext : DbContext
                 BrandName = "Bershka",
                 City = "Ankara",
                 District = "Cankaya",
-                StoreName = "Bershka Armada AVM",
-                BrandSpecificStoreId = "BSK-ANK-CNK-01",
+                StoreName = "Kentpark",
+                BrandSpecificStoreId = "6943",
                 IsActive = true,
                 CreatedAt = seedCreatedAt
             },
@@ -71,8 +74,8 @@ public class StoreReferenceDbContext : DbContext
                 BrandName = "Bershka",
                 City = "Izmir",
                 District = "Bornova",
-                StoreName = "Bershka Forum Bornova",
-                BrandSpecificStoreId = "BSK-IZM-BRN-01",
+                StoreName = "Forum Bornova",
+                BrandSpecificStoreId = "8426",
                 IsActive = true,
                 CreatedAt = seedCreatedAt
             }
