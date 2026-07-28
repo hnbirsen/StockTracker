@@ -9,4 +9,5 @@
   <Project Path="StockTracker.SearchOrchestrator/StockTracker.SearchOrchestrator.csproj" />
   <Project Path="StockTracker.StoreReference/StockTracker.StoreReference.csproj" />
   <Project Path="StockTracker.Subscription/StockTracker.Subscription.csproj" />
+  <Project Path="tests/StockTracker.SearchOrchestrator.Tests/StockTracker.SearchOrchestrator.Tests.csproj" />
 </Solution>
