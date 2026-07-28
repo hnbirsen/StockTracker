@@ -15,13 +15,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Repo'yu indir (Node 24 uyumlu patch sürümü)
+      # 1. Repo'yu indir
       - name: Checkout code
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v5
 
       # 2. .NET SDK'yı kur
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4.3.0
+        uses: actions/setup-dotnet@v5.1.0
         with:
           dotnet-version: "10.0.x"
 
@@ -46,7 +46,7 @@ jobs:
     steps:
       # Node 24 uyumlu ve güncel checkout eylemi
       - name: Checkout code
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v5
 
       # Docker bileşenlerini güncel tutmak ve tam uyumluluk sağlamak için
       - name: Set up Docker Buildx
