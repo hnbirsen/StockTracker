@@ -18,7 +18,11 @@ public class BrandDetectionDbContext : DbContext
             entity.Property(b => b.RegexPattern).IsRequired().HasMaxLength(200);
         });
 
-        // Seed: Bershka — 7-9 haneli sayısal iç kod
+        // Seed: Bershka — 11 haneli sayısal kod (önde sıfır + 4 haneli model + 3 haneli varyant + 3 haneli renk,
+        // ör. REF "2891/054/426" -> "02891054426"). Faz 2.4'te gerçek bershka.com ürün sayfaları/asset URL'leri
+        // üzerinden doğrulandı (bkz. .claude/ARCHITECTURE.md > Bershka Scraper) — BershkaStockApiClient'ın
+        // stok API'sine gönderdiği "productCode" ile birebir aynı format olmalı. Eski `^\d{7,9}$` deseni
+        // doğrulanmamış bir tahmindi ve gerçek formatla uyuşmuyordu.
         // Seed: Zara — 5 rakam / 3 rakam / 3 rakam formatı (örn. 12345/678/123)
         // Seed: Pull&Bear — 8 haneli sayısal
         var bershkaId = Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
@@ -31,8 +35,10 @@ public class BrandDetectionDbContext : DbContext
                 Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
                 BrandId = bershkaId,
                 BrandName = "Bershka",
-                RegexPattern = @"^\d{7,9}$",
-                Confidence = ConfidenceLevel.Medium,
+                RegexPattern = @"^\d{11}$",
+                // 11 haneli, önde sıfırlı format diğer markalarla çakışmıyor (Zara ayraçlı, Pull&Bear 8 haneli)
+                // — Medium'dan High'a çıkarıldı, gerçek site verisiyle doğrulandığı için.
+                Confidence = ConfidenceLevel.High,
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             },
@@ -52,7 +58,9 @@ public class BrandDetectionDbContext : DbContext
                 BrandId = pullbearId,
                 BrandName = "Pull&Bear",
                 RegexPattern = @"^\d{8}$",
-                Confidence = ConfidenceLevel.Low, // Bershka ile çakışma riski var
+                // Low tutuldu — Pull&Bear'ın gerçek kod formatı henüz bir ürün sayfası üzerinden doğrulanmadı
+                // (Bershka'nın artık 11 haneli olduğu doğrulandığı için önceki çakışma riski ortadan kalktı).
+                Confidence = ConfidenceLevel.Low,
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             }
