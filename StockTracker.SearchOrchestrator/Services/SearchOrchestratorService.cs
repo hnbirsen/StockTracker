@@ -1,6 +1,6 @@
 using MassTransit;
 using StockTracker.SearchOrchestrator.DTOs;
-using StockTracker.Shared.Contracts.Messages.V1;
+using StockTracker.Shared.Contracts.Messages.V2;
 using StockTracker.Shared.Contracts.Messaging;
 
 namespace StockTracker.SearchOrchestrator.Services;
@@ -119,6 +119,7 @@ public class SearchOrchestratorService : ISearchOrchestratorService
             BrandSpecificStoreId: brandSpecificStoreId,
             City: city,
             District: district,
+            ProductUrl: lookup.ProductUrl,
             RequestedAt: DateTime.UtcNow
         ));
 

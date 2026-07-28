@@ -1,12 +1,15 @@
 namespace StockTracker.SearchOrchestrator.DTOs;
 
 // Product Service GET /lookup/{code} yanıtının ihtiyaç duyulan alt kümesi.
+// ProductUrl, yalnızca manuel/site-search ile çözülmüş mappinglerde dolu olur (bkz. ProductBrandMap.ProductUrl) —
+// yalnızca regex format eşleşmesiyle çözülmüş ürünlerde null'dur ve CheckStockCommand'a null olarak taşınır.
 public record ProductLookupResponse(
     string ProductCode,
     bool IsResolved,
     Guid? BrandId,
     string? BrandName,
-    string? ScraperQueueName
+    string? ScraperQueueName,
+    string? ProductUrl
 );
 
 // Brand Detection Service POST /resolve yanıtının ihtiyaç duyulan alt kümesi.

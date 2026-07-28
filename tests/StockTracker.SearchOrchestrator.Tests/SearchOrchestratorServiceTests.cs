@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using StockTracker.SearchOrchestrator.DTOs;
 using StockTracker.SearchOrchestrator.Services;
-using StockTracker.Shared.Contracts.Messages.V1;
+using StockTracker.Shared.Contracts.Messages.V2;
 
 namespace StockTracker.SearchOrchestrator.Tests;
 
@@ -42,7 +42,7 @@ public class SearchOrchestratorServiceTests
 
         _productClient
             .Setup(c => c.LookupAsync(request.ProductCode))
-            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, true, Guid.NewGuid(), "Bershka", "bershka"));
+            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, true, Guid.NewGuid(), "Bershka", "bershka", "https://www.bershka.com/tr/test-urun-c0p123456789.html?colorId=100"));
 
         var sut = CreateSut();
         var response = await sut.SearchAsync(request);
@@ -53,7 +53,8 @@ public class SearchOrchestratorServiceTests
         _sendEndpointProvider.Verify(p => p.GetSendEndpoint(
             It.Is<Uri>(u => u.ToString() == "queue:stock.check.bershka")), Times.Once);
         _sendEndpoint.Verify(e => e.Send(
-            It.Is<CheckStockCommand>(cmd => cmd.ProductCode == request.ProductCode && cmd.Size == request.Size),
+            It.Is<CheckStockCommand>(cmd => cmd.ProductCode == request.ProductCode && cmd.Size == request.Size
+                && cmd.ProductUrl == "https://www.bershka.com/tr/test-urun-c0p123456789.html?colorId=100"),
             It.IsAny<CancellationToken>()), Times.Once);
         _brandDetectionClient.Verify(c => c.ResolveAsync(It.IsAny<string>()), Times.Never);
     }
@@ -69,7 +70,7 @@ public class SearchOrchestratorServiceTests
 
         _productClient
             .Setup(c => c.LookupAsync(request.ProductCode))
-            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, true, Guid.NewGuid(), "Bershka", "bershka"));
+            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, true, Guid.NewGuid(), "Bershka", "bershka", "https://www.bershka.com/tr/test-urun-c0p123456789.html?colorId=100"));
 
         var sut = CreateSut();
         var response = await sut.SearchAsync(request);
@@ -90,7 +91,7 @@ public class SearchOrchestratorServiceTests
 
         _productClient
             .Setup(c => c.LookupAsync(request.ProductCode))
-            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, false, null, null, null));
+            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, false, null, null, null, null));
 
         _brandDetectionClient
             .Setup(c => c.ResolveAsync(request.ProductCode))
@@ -116,8 +117,8 @@ public class SearchOrchestratorServiceTests
 
         _productClient
             .SetupSequence(c => c.LookupAsync(request.ProductCode))
-            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, false, null, null, null))
-            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, false, null, null, null));
+            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, false, null, null, null, null))
+            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, false, null, null, null, null));
 
         _brandDetectionClient
             .Setup(c => c.ResolveAsync(request.ProductCode))
@@ -140,8 +141,8 @@ public class SearchOrchestratorServiceTests
 
         _productClient
             .SetupSequence(c => c.LookupAsync(request.ProductCode))
-            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, false, null, null, null))
-            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, true, brandId, "Bershka", "bershka"));
+            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, false, null, null, null, null))
+            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, true, brandId, "Bershka", "bershka", "https://www.bershka.com/tr/test-urun-c0p123456789.html?colorId=100"));
 
         _brandDetectionClient
             .Setup(c => c.ResolveAsync(request.ProductCode))
@@ -169,7 +170,7 @@ public class SearchOrchestratorServiceTests
 
         _productClient
             .Setup(c => c.LookupAsync(request.ProductCode))
-            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, true, Guid.NewGuid(), "Bershka", "bershka"));
+            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, true, Guid.NewGuid(), "Bershka", "bershka", "https://www.bershka.com/tr/test-urun-c0p123456789.html?colorId=100"));
 
         var sut = CreateSut();
         await sut.SearchAsync(request);
@@ -192,7 +193,7 @@ public class SearchOrchestratorServiceTests
 
         _productClient
             .Setup(c => c.LookupAsync(request.ProductCode))
-            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, true, brandId, "Bershka", "bershka"));
+            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, true, brandId, "Bershka", "bershka", "https://www.bershka.com/tr/test-urun-c0p123456789.html?colorId=100"));
 
         var sut = CreateSut();
 
