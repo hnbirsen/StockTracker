@@ -10,4 +10,8 @@
     <ProjectReference Include="../StockTracker.Shared.Contracts/StockTracker.Shared.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="StackExchange.Redis" Version="3.0.17" />
+  </ItemGroup>
+
 </Project>
