@@ -1,84 +1,90 @@
 # StockTracker
 
-StockTracker is a .NET-based microservices workspace for stock, catalog, subscription, billing, notification, and identity-related flows. Incoming traffic is routed through an API gateway, while local infrastructure is provisioned with Docker Compose.
-
-The repository currently contains a mixed state:
-
-- `StockTracker.Identity` already includes a working authentication flow with PostgreSQL, Entity Framework Core, JWT access tokens, and refresh tokens.
-- Most other services are still scaffold-level Minimal API applications with health endpoints and reserved service boundaries.
+A microservices-based stock availability tracking application. Users search for products by barcode or product code, select size and location (city/district), and receive real-time stock availability from both online and physical stores. When an out-of-stock item becomes available, users are notified via push and email. Business model is freemium with subscription payments.
 
 ## Table of Contents
 
 - [Architecture](#architecture)
 - [Services](#services)
-- [Current Implementation Status](#current-implementation-status)
+- [Implementation Status](#implementation-status)
 - [Tech Stack](#tech-stack)
 - [Requirements](#requirements)
 - [Setup](#setup)
 - [Running the Project](#running-the-project)
-- [Identity Service](#identity-service)
+- [Service Endpoints](#service-endpoints)
 - [Gateway Routes](#gateway-routes)
+- [Environment Variables](#environment-variables)
 - [CI](#ci)
 - [Development Notes](#development-notes)
 - [Project Structure](#project-structure)
 
 ## Architecture
 
-The system is organized around a gateway-first microservice layout.
+External client traffic flows through the API Gateway. Internal service-to-service communication bypasses the gateway and uses direct HTTP — this avoids unnecessary latency, keeps internal endpoints off the public surface, and prevents a gateway outage from breaking inter-service calls.
 
 ```mermaid
 flowchart LR
-        Client[Client] --> Gateway[StockTracker.Gateway :8000]
-        Gateway --> Identity[Identity :5001]
-        Gateway --> Product[Product :5002]
-        Gateway --> Brand[BrandDetection :5003]
-        Gateway --> Store[StoreReference :5004]
-        Gateway --> Search[SearchOrchestrator :5005]
-        Gateway --> Subscription[Subscription :5006]
-        Gateway --> Billing[Billing :5007]
-        Gateway --> Notification[Notification :5008]
+    Client[Client] --> Gateway[Gateway :8000]
 
-        Identity -.-> Postgres[(PostgreSQL)]
-        Product -.-> Postgres
-        Brand -.-> Postgres
-        Store -.-> Postgres
-        Subscription -.-> Postgres
-        Billing -.-> Postgres
-        Notification -.-> Postgres
+    Gateway --> Identity[Identity :5001]
+    Gateway --> Product[Product :5002]
+    Gateway --> Brand[BrandDetection :5003]
+    Gateway --> Store[StoreReference :5004]
+    Gateway --> Search[SearchOrchestrator :5005]
+    Gateway --> Subscription[Subscription :5006]
+    Gateway --> Billing[Billing :5007]
+    Gateway --> Notification[Notification :5008]
 
-        Search -.-> Redis[(Redis)]
-        Billing -.-> Rabbit[(RabbitMQ)]
-        Notification -.-> Rabbit
+    Brand -->|internal HTTP| Product
+
+    Identity -.-> PG[(PostgreSQL)]
+    Product -.-> PG
+    Brand -.-> PG
+    Store -.-> PG
+    Subscription -.-> PG
+    Billing -.-> PG
+    Notification -.-> PG
+
+    Product -.-> Redis[(Redis)]
+    Search -.-> MQ[(RabbitMQ)]
+    Notification -.-> MQ
 ```
 
 ## Services
 
-| Service | Port | Purpose |
-| --- | --- | --- |
-| StockTracker.Gateway | 8000 | Public entry point that forwards requests to downstream services through YARP |
-| StockTracker.Identity | 5001 | Authentication and identity management |
-| StockTracker.Product | 5002 | Product and stock domain boundary |
-| StockTracker.BrandDetection | 5003 | Brand detection or brand matching domain boundary |
-| StockTracker.StoreReference | 5004 | Store and source reference data |
-| StockTracker.SearchOrchestrator | 5005 | Search orchestration layer |
-| StockTracker.Subscription | 5006 | Subscription and plan management |
-| StockTracker.Billing | 5007 | Billing and payment-related workflows |
-| StockTracker.Notification | 5008 | Notification delivery workflows |
-| StockTracker.Shared.Contracts | - | Shared contracts library for DTOs and cross-service message definitions |
+| Service | Port | Responsibility | Status |
+| --- | --- | --- | --- |
+| StockTracker.Gateway | 8000 | YARP reverse proxy, JWT validation, rate limiting | ✅ Done |
+| StockTracker.Identity | 5001 | Registration, login, JWT + refresh token management | ✅ Done |
+| StockTracker.Product | 5002 | Barcode/code lookup, brand mapping, Redis cache | ✅ Done |
+| StockTracker.BrandDetection | 5003 | Regex format matching, manual brand selection | ✅ Done |
+| StockTracker.StoreReference | 5004 | City/district → brand-specific store ID mapping | 🔜 Planned |
+| StockTracker.SearchOrchestrator | 5005 | Routes user queries to scraper queues | 🔜 Planned |
+| StockTracker.Subscription | 5006 | Watch groups, tracking list, deduplication | 🔜 Planned |
+| StockTracker.Billing | 5007 | Freemium plans, iyzico/Paddle integration | 🔜 Planned |
+| StockTracker.Notification | 5008 | FCM push + email notifications | 🔜 Planned |
+| StockTracker.Shared.Contracts | — | Shared DTOs and inter-service message models | 🔜 In use |
 
-## Current Implementation Status
+## Implementation Status
 
 | Area | Status |
 | --- | --- |
-| Gateway routing | Implemented |
-| Identity auth flow | Implemented |
-| PostgreSQL container setup | Implemented |
-| Redis container setup | Implemented |
-| RabbitMQ container setup | Implemented |
-| Product service business endpoints | Scaffold only |
-| Billing service business endpoints | Scaffold only |
-| Notification service business endpoints | Scaffold only |
-| Search orchestration logic | Scaffold only |
+| Docker Compose (PostgreSQL ×7, Redis, RabbitMQ) | ✅ Done |
+| API Gateway (YARP) routing | ✅ Done |
+| GitHub Actions CI pipeline | ✅ Done |
+| Identity Service (register, login, JWT, refresh token) | ✅ Done |
+| Product Service (lookup, brand mapping, Redis cache) | ✅ Done |
+| Brand Detection Service (regex format matching) | ✅ Done |
+| Store Reference Service | 🔜 Planned |
+| Search Orchestrator + RabbitMQ integration | 🔜 Planned |
+| Bershka Scraper | 🔜 Planned |
+| Scraper Health Monitoring | 🔜 Planned |
+| Subscription Service (watch groups) | 🔜 Planned |
+| Stock Poller (Quartz.NET/Hangfire) | 🔜 Planned |
+| Notification Service (FCM + email) | 🔜 Planned |
+| Billing Service (freemium + payment) | 🔜 Planned |
+| React Web frontend | 🔜 Planned |
+| React Native + Expo mobile app | 🔜 Planned |
 
 ## Tech Stack
 
@@ -87,187 +93,240 @@ flowchart LR
 | Application platform | .NET 10 |
 | API style | ASP.NET Core Minimal API |
 | API gateway | YARP Reverse Proxy |
-| ORM | Entity Framework Core 10 |
-| Database provider | Npgsql for PostgreSQL |
-| Authentication | JWT Bearer tokens |
-| Password hashing | BCrypt.Net |
-| Database | PostgreSQL 16 |
+| ORM | Entity Framework Core |
+| Database | PostgreSQL 16 (one database per service) |
 | Cache | Redis 7 |
-| Messaging | RabbitMQ 3 Management |
+| Messaging | RabbitMQ 3 |
+| Password hashing | BCrypt.Net |
+| Authentication | JWT Bearer tokens |
+| Scraping | Playwright (planned) |
+| Web frontend | React (planned) |
+| Mobile | React Native + Expo (planned) |
+| Payment | iyzico / Paddle (planned) |
 | Container orchestration | Docker Compose |
 | CI | GitHub Actions |
 
 ## Requirements
 
 - .NET SDK 10
-- Docker and Docker Compose
-- Optional tools: `curl`, `psql`, `redis-cli`
+- Docker Desktop
+- `dotnet-ef` tool: `dotnet tool install --global dotnet-ef`
 
 ## Setup
 
-1. Move to the repository root.
-2. Review the existing `.env` file.
-3. Start local infrastructure:
-
 ```bash
+git clone <repo-url>
+cd StockTracker
+cp ".env example" .env    # fill in the values
 docker compose up -d
-```
-
-4. Restore NuGet packages:
-
-```bash
 dotnet restore StockTracker.slnx
 ```
 
+The PostgreSQL init script at `docker/postgres-init/init-multiple-dbs.sh` creates all seven databases automatically on first container start. It reads database names from the `POSTGRES_MULTIPLE_DATABASES` environment variable defined in `docker-compose.yml`.
+
 ## Running the Project
 
-You can run each service in a separate terminal.
+Each service runs on a fixed port. Open a separate terminal for each:
 
 ```bash
-dotnet run --project StockTracker.Gateway
-dotnet run --project StockTracker.Identity
-dotnet run --project StockTracker.Product
-dotnet run --project StockTracker.BrandDetection
-dotnet run --project StockTracker.StoreReference
-dotnet run --project StockTracker.SearchOrchestrator
-dotnet run --project StockTracker.Subscription
-dotnet run --project StockTracker.Billing
-dotnet run --project StockTracker.Notification
+dotnet run --project StockTracker.Gateway           # :8000
+dotnet run --project StockTracker.Identity          # :5001
+dotnet run --project StockTracker.Product           # :5002
+dotnet run --project StockTracker.BrandDetection    # :5003
+dotnet run --project StockTracker.StoreReference    # :5004
+dotnet run --project StockTracker.SearchOrchestrator # :5005
+dotnet run --project StockTracker.Subscription      # :5006
+dotnet run --project StockTracker.Billing           # :5007
+dotnet run --project StockTracker.Notification      # :5008
 ```
 
-Health checks:
+When working on a single service, bring up only the infrastructure and run that service from your IDE:
+
+```bash
+docker compose up -d    # starts PostgreSQL, Redis, RabbitMQ
+# then run the target service from your IDE in Debug mode
+```
+
+Health check all services:
 
 ```bash
 curl http://localhost:8000/health/gateway
-curl http://localhost:5001/health
-curl http://localhost:5002/health
-curl http://localhost:5003/health
-curl http://localhost:5004/health
-curl http://localhost:5005/health
-curl http://localhost:5006/health
-curl http://localhost:5007/health
-curl http://localhost:5008/health
+for port in 5001 5002 5003 5004 5005 5006 5007 5008; do
+  echo -n ":$port → " && curl -s http://localhost:$port/health
+  echo
+done
 ```
 
-## Identity Service
+## Service Endpoints
 
-Authentication module inside `StockTracker.Identity`.
+### Identity Service (`:5001`)
 
-Implemented pieces:
-
-- User registration
-- User login
-- JWT access token generation
-- Refresh token generation and rotation
-- Refresh token revocation on logout
-- Automatic database migration at startup
-- PostgreSQL persistence with Entity Framework Core
-
-Default local configuration is provided in `appsettings.Development.json` for development use.
-
-### Identity Endpoints
-
-| Method | Endpoint | Description |
+| Method | Path | Description |
 | --- | --- | --- |
-| POST | `/auth/register` | Creates a user and returns access and refresh tokens |
-| POST | `/auth/login` | Authenticates a user and returns tokens |
-| POST | `/auth/refresh-token` | Exchanges a valid refresh token for a new auth response |
-| POST | `/auth/logout` | Revokes a refresh token |
-| GET | `/health` | Service health check |
+| POST | `/auth/register` | Create account, returns token pair |
+| POST | `/auth/login` | Authenticate, returns token pair |
+| POST | `/auth/refresh` | Exchange refresh token for new token pair |
+| POST | `/auth/logout` | Revoke refresh token |
+| GET | `/health` | Health check |
 
-### Identity Request Models
+**Register / Login request:**
+```json
+{ "email": "user@example.com", "password": "password123", "firstName": "Jane", "lastName": "Doe" }
+```
 
-`POST /auth/register`
+**Refresh / Logout request:**
+```json
+{ "refreshToken": "..." }
+```
 
+**Response (register + login):**
 ```json
 {
-    "email": "user@example.com",
-    "password": "password123",
-    "firstName": "Jane",
-    "lastName": "Doe"
+  "accessToken": "...",
+  "refreshToken": "...",
+  "accessTokenExpiresAt": "...",
+  "user": { "id": "...", "email": "...", "firstName": "...", "lastName": "...", "isEmailVerified": false }
 }
 ```
 
-`POST /auth/login`
+### Product Service (`:5002`)
 
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/lookup/{productCode}` | Resolve brand for a product code (cache → DB) |
+| POST | `/mappings` | Save a resolved brand mapping |
+| GET | `/brands` | List all active brands |
+| GET | `/health` | Health check |
+
+**Lookup response (resolved):**
 ```json
 {
-    "email": "user@example.com",
-    "password": "password123"
+  "productCode": "12345/678/123",
+  "codeType": "BrandSpecific",
+  "isResolved": true,
+  "brandId": "...",
+  "brandName": "Zara",
+  "scraperQueueName": "zara",
+  "confidence": 3,
+  "resolvedVia": 1,
+  "fromCache": false
 }
 ```
 
-`POST /auth/refresh-token` and `POST /auth/logout`
-
+**Lookup response (unresolved):**
 ```json
 {
-    "refreshToken": "..."
+  "productCode": "UNKNOWN123",
+  "codeType": "Unknown",
+  "isResolved": false,
+  "brandId": null,
+  "brandName": null
 }
 ```
 
-### Identity Configuration
+### Brand Detection Service (`:5003`)
 
-The identity service expects the following settings:
+| Method | Path | Description |
+| --- | --- | --- |
+| POST | `/resolve` | Detect brand via regex pattern matching |
+| POST | `/resolve/manual` | Save user-selected brand mapping |
+| GET | `/health` | Health check |
 
-| Key | Purpose |
-| --- | --- |
-| `ConnectionStrings:IdentityDb` | PostgreSQL connection string for the identity database |
-| `JwtSettings:SecretKey` | Symmetric key used to sign JWT access tokens |
-| `JwtSettings:Issuer` | Token issuer |
-| `JwtSettings:Audience` | Token audience |
-| `JwtSettings:AccessTokenExpiryMinutes` | Access token lifetime |
-| `JwtSettings:RefreshTokenExpiryDays` | Refresh token lifetime |
+**Resolve request:**
+```json
+{ "productCode": "12345/678/123" }
+```
 
-For production, move these values to environment variables or a secrets store instead of keeping them in local configuration files.
+**Resolve response:**
+```json
+{
+  "productCode": "12345/678/123",
+  "isResolved": true,
+  "candidates": [
+    { "brandId": "...", "brandName": "Zara", "confidence": 3, "matchedPattern": "^\\d{5}/\\d{3}/\\d{2,3}$" }
+  ]
+}
+```
+
+**Manual resolve request:**
+```json
+{ "productCode": "1234567", "brandId": "...", "brandName": "Bershka" }
+```
 
 ## Gateway Routes
 
-The gateway forwards requests using the following route prefixes:
+All external traffic goes through the gateway at `http://localhost:8000`.
 
-| External route | Target service |
+| External prefix | Target service | Port |
+| --- | --- | --- |
+| `/api/identity/*` | Identity | 5001 |
+| `/api/product/*` | Product | 5002 |
+| `/api/brand-detection/*` | Brand Detection | 5003 |
+| `/api/store-reference/*` | Store Reference | 5004 |
+| `/api/search/*` | Search Orchestrator | 5005 |
+| `/api/subscriptions/*` | Subscription | 5006 |
+| `/api/billing/*` | Billing | 5007 |
+| `/api/notifications/*` | Notification | 5008 |
+
+The prefix is stripped before forwarding (e.g. `/api/product/lookup/123` → `/lookup/123`).
+
+## Environment Variables
+
+All secrets are provided via environment variables, never hardcoded in `appsettings.json`.
+
+| Variable | Used by |
 | --- | --- |
-| `/api/identity/*` | `http://localhost:5001` |
-| `/api/product/*` | `http://localhost:5002` |
-| `/api/brand-detection/*` | `http://localhost:5003` |
-| `/api/store-reference/*` | `http://localhost:5004` |
-| `/api/search/*` | `http://localhost:5005` |
-| `/api/subscriptions/*` | `http://localhost:5006` |
-| `/api/billing/*` | `http://localhost:5007` |
-| `/api/notifications/*` | `http://localhost:5008` |
+| `POSTGRES_USER` | Docker Compose |
+| `POSTGRES_PASSWORD` | Docker Compose |
+| `RABBITMQ_USER` | Docker Compose |
+| `RABBITMQ_PASSWORD` | Docker Compose |
+| `IDENTITY_DB_CONNECTION` | Identity Service |
+| `JWT_SECRET_KEY` | Identity Service |
+| `JWT_ISSUER` | Identity Service |
+| `JWT_AUDIENCE` | Identity Service |
+| `PRODUCT_DB_CONNECTION` | Product Service |
+| `REDIS_CONNECTION` | Product Service |
+| `BRAND_DB_CONNECTION` | Brand Detection Service |
+| `PRODUCT_SERVICE_URL` | Brand Detection Service (internal HTTP) |
+
+Copy `.env example` to `.env` and fill in the values. The `.env` file is gitignored.
 
 ## CI
 
-The repository includes a GitHub Actions workflow that runs:
+GitHub Actions workflow at `.github/workflows/ci.yml` runs on every push to `main` and on pull requests:
 
 - `dotnet restore`
-- `dotnet build`
-- `dotnet test`
-- `docker compose config`
+- `dotnet build --configuration Release`
+- `dotnet test --configuration Release`
+- `docker compose config` (validates docker-compose.yml)
 
 ## Development Notes
 
-- `StockTracker.Identity` is the most complete service in the workspace right now.
-- The other services still mainly expose `/health` endpoints and reserved service boundaries.
-- PostgreSQL databases are initialized through the script in `docker/postgres-init`.
-- Redis and RabbitMQ are provisioned in Docker Compose, but the application-level integrations are not yet implemented in most services.
-- `StockTracker.Shared.Contracts` is positioned as the shared contract library for future DTO and event reuse.
+- Internal service URLs (e.g. `PRODUCT_SERVICE_URL`) point directly to service ports, not through the gateway.
+- Migrations run automatically at startup via `db.Database.MigrateAsync()`.
+- All `appsettings.json` files use `"REPLACE_WITH_ENV"` as a placeholder for secrets.
+- RabbitMQ management UI is available at `http://localhost:15672`.
+- PostgreSQL databases are created by `docker/postgres-init/init-multiple-dbs.sh` on first container start.
 
 ## Project Structure
 
 ```text
 .
-|- StockTracker.Gateway
-|- StockTracker.Identity
-|- StockTracker.Product
-|- StockTracker.BrandDetection
-|- StockTracker.StoreReference
-|- StockTracker.SearchOrchestrator
-|- StockTracker.Subscription
-|- StockTracker.Billing
-|- StockTracker.Notification
-|- StockTracker.Shared.Contracts
-|- docker
-|  \- postgres-init
-|- docker-compose.yml
-\- StockTracker.slnx
+├── .claude/                    # project documentation
+├── .github/workflows/          # CI pipeline
+├── docker/
+│   └── postgres-init/
+│       └── init-multiple-dbs.sh
+├── StockTracker.Gateway/
+├── StockTracker.Identity/
+├── StockTracker.Product/
+├── StockTracker.BrandDetection/
+├── StockTracker.StoreReference/
+├── StockTracker.SearchOrchestrator/
+├── StockTracker.Subscription/
+├── StockTracker.Billing/
+├── StockTracker.Notification/
+├── StockTracker.Shared.Contracts/
+├── docker-compose.yml
+└── StockTracker.slnx
 ```
