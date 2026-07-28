@@ -1,3 +1,7 @@
+using StockTracker.Shared.Contracts.Configuration;
+
+EnvFileLoader.LoadFromNearestEnvFile();
+
 var builder = WebApplication.CreateBuilder(args);
 
 // YARP Reverse Proxy'yi konfigüre et
