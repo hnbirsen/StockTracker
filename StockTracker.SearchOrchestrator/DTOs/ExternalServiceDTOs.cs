@@ -23,3 +23,12 @@ public record ResolveResponse(
     bool IsResolved,
     List<BrandCandidateDto> Candidates
 );
+
+// Store Reference Service GET /stores yanıtının ihtiyaç duyulan alt kümesi.
+public record StoreDto(
+    Guid Id,
+    Guid BrandId,
+    string City,
+    string District,
+    string BrandSpecificStoreId
+);

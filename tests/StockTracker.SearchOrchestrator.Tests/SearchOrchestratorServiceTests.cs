@@ -12,6 +12,7 @@ public class SearchOrchestratorServiceTests
 {
     private readonly Mock<IProductServiceClient> _productClient = new();
     private readonly Mock<IBrandDetectionServiceClient> _brandDetectionClient = new();
+    private readonly Mock<IStoreReferenceServiceClient> _storeReferenceClient = new();
     private readonly Mock<ISendEndpointProvider> _sendEndpointProvider = new();
     private readonly Mock<ISendEndpoint> _sendEndpoint = new();
 
@@ -21,9 +22,15 @@ public class SearchOrchestratorServiceTests
             .Setup(p => p.GetSendEndpoint(It.IsAny<Uri>()))
             .ReturnsAsync(_sendEndpoint.Object);
 
+        // Varsayılan: Store Reference'ta eşleşen mağaza yok — testler aksini kurmadıkça fallback (StoreId=null) yolu izlenir.
+        _storeReferenceClient
+            .Setup(c => c.GetStoresAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new List<StoreDto>());
+
         return new SearchOrchestratorService(
             _productClient.Object,
             _brandDetectionClient.Object,
+            _storeReferenceClient.Object,
             _sendEndpointProvider.Object,
             Mock.Of<ILogger<SearchOrchestratorService>>());
     }
@@ -149,6 +156,64 @@ public class SearchOrchestratorServiceTests
         response.Status.Should().Be("Queued");
         _sendEndpoint.Verify(e => e.Send(
             It.Is<CheckStockCommand>(cmd => cmd.BrandId == brandId),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SearchAsync_WhenLocationHasNoMatchingStore_SendsCommandWithNullStoreId()
+    {
+        var request = new SearchRequest(Guid.NewGuid(), "1234567", "38", new List<SearchLocationRequest>
+        {
+            new("Antalya", "Muratpasa")
+        });
+
+        _productClient
+            .Setup(c => c.LookupAsync(request.ProductCode))
+            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, true, Guid.NewGuid(), "Bershka", "bershka"));
+
+        var sut = CreateSut();
+        await sut.SearchAsync(request);
+
+        _sendEndpoint.Verify(e => e.Send(
+            It.Is<CheckStockCommand>(cmd => cmd.StoreId == null && cmd.City == "Antalya" && cmd.District == "Muratpasa"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SearchAsync_WhenLocationHasMatchingStores_SendsOneCommandPerResolvedStoreId()
+    {
+        var brandId = Guid.NewGuid();
+        var storeId1 = Guid.NewGuid();
+        var storeId2 = Guid.NewGuid();
+        var request = new SearchRequest(Guid.NewGuid(), "1234567", "38", new List<SearchLocationRequest>
+        {
+            new("Istanbul", "Kadikoy")
+        });
+
+        _productClient
+            .Setup(c => c.LookupAsync(request.ProductCode))
+            .ReturnsAsync(new ProductLookupResponse(request.ProductCode, true, brandId, "Bershka", "bershka"));
+
+        var sut = CreateSut();
+
+        // CreateSut()'un genel "eşleşme yok" fallback setup'ından SONRA kaydediliyor ki Moq bu daha
+        // spesifik setup'ı önceliklendirsin (aynı mock'ta en son eklenen eşleşen setup kazanır).
+        _storeReferenceClient
+            .Setup(c => c.GetStoresAsync(brandId, "Istanbul", "Kadikoy"))
+            .ReturnsAsync(new List<StoreDto>
+            {
+                new(storeId1, brandId, "Istanbul", "Kadikoy", "BSK-IST-KDK-01"),
+                new(storeId2, brandId, "Istanbul", "Kadikoy", "BSK-IST-KDK-02")
+            });
+
+        var response = await sut.SearchAsync(request);
+
+        response.Status.Should().Be("Queued");
+        _sendEndpoint.Verify(e => e.Send(
+            It.Is<CheckStockCommand>(cmd => cmd.StoreId == storeId1),
+            It.IsAny<CancellationToken>()), Times.Once);
+        _sendEndpoint.Verify(e => e.Send(
+            It.Is<CheckStockCommand>(cmd => cmd.StoreId == storeId2),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 }

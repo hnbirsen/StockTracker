@@ -58,7 +58,7 @@ flowchart LR
 | StockTracker.Identity | 5001 | Registration, login, JWT + refresh token management | ✅ Done |
 | StockTracker.Product | 5002 | Barcode/code lookup, brand mapping, Redis cache | ✅ Done |
 | StockTracker.BrandDetection | 5003 | Regex format matching, manual brand selection | ✅ Done |
-| StockTracker.StoreReference | 5004 | City/district → brand-specific store ID mapping | 🔜 Planned |
+| StockTracker.StoreReference | 5004 | City/district → brand-specific store ID mapping | ✅ Done |
 | StockTracker.SearchOrchestrator | 5005 | Routes user queries to scraper queues, throttling | ✅ Done |
 | StockTracker.Subscription | 5006 | Watch groups, tracking list, deduplication | 🔜 Planned |
 | StockTracker.Billing | 5007 | Freemium plans, iyzico/Paddle integration | 🔜 Planned |
@@ -77,7 +77,7 @@ flowchart LR
 | Brand Detection Service (regex format matching) | ✅ Done |
 | Redis cache metrics + invalidation (Product Service) | ✅ Done |
 | RabbitMQ message contracts + MassTransit setup (Shared.Contracts) | ✅ Done |
-| Store Reference Service | 🔜 Planned |
+| Store Reference Service (Bershka seed data) | ✅ Done |
 | Search Orchestrator + RabbitMQ integration | ✅ Done |
 | Bershka Scraper | 🔜 Planned |
 | Scraper Health Monitoring | 🔜 Planned |
@@ -257,11 +257,34 @@ done
 { "productCode": "1234567", "brandId": "...", "brandName": "Bershka" }
 ```
 
+### Store Reference Service (`:5004`)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/stores?brandId=&city=&district=` | List active stores, all filters optional (case-insensitive city/district match) |
+| GET | `/health` | Health check |
+
+**Response:**
+```json
+[
+  {
+    "id": "d1111111-0000-0000-0000-000000000001",
+    "brandId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "brandName": "Bershka",
+    "city": "Istanbul",
+    "district": "Kadikoy",
+    "storeName": "Bershka Kadikoy",
+    "brandSpecificStoreId": "BSK-IST-KDK-01"
+  }
+]
+```
+Seed data currently covers Bershka only (4 stores across Istanbul/Ankara/Izmir) — `brandSpecificStoreId` values are placeholders pending real scraper data (Faz 2.4).
+
 ### Search Orchestrator (`:5005`)
 
 | Method | Path | Description |
 | --- | --- | --- |
-| POST | `/search` | Resolve brand (via Product/Brand Detection) and dispatch `CheckStockCommand` per location |
+| POST | `/search` | Resolve brand (via Product/Brand Detection), resolve store (via Store Reference), and dispatch `CheckStockCommand` per location |
 | GET | `/health` | Health check |
 
 **Search request:**
@@ -273,7 +296,7 @@ done
   "locations": [{ "city": "Istanbul", "district": "Kadikoy" }]
 }
 ```
-`locations` is optional — omit it (or send `null`) for an online-only stock check.
+`locations` is optional — omit it (or send `null`) for an online-only stock check. For each location, Search Orchestrator queries Store Reference Service: if one or more stores match, one `CheckStockCommand` is sent per store (with a real `storeId`); if none match, a single command is sent with `storeId: null` so the scraper can still perform an online-only check.
 
 **Response (brand known — `202 Accepted`):**
 ```json
@@ -332,6 +355,8 @@ All secrets are provided via environment variables, never hardcoded in `appsetti
 | `BRAND_DB_CONNECTION` | Brand Detection Service |
 | `PRODUCT_SERVICE_URL` | Brand Detection Service, Search Orchestrator (internal HTTP) |
 | `BRAND_DETECTION_SERVICE_URL` | Search Orchestrator (internal HTTP) |
+| `STORE_REFERENCE_SERVICE_URL` | Search Orchestrator (internal HTTP) |
+| `STORE_DB_CONNECTION` | Store Reference Service |
 
 Copy `.env example` to `.env` and fill in the values. The `.env` file is gitignored.
 

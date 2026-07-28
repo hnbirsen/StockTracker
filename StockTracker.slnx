@@ -13,4 +13,5 @@
   <Project Path="tests/StockTracker.Identity.Tests/StockTracker.Identity.Tests.csproj" />
   <Project Path="tests/StockTracker.Product.Tests/StockTracker.Product.Tests.csproj" />
   <Project Path="tests/StockTracker.BrandDetection.Tests/StockTracker.BrandDetection.Tests.csproj" />
+  <Project Path="tests/StockTracker.StoreReference.Tests/StockTracker.StoreReference.Tests.csproj" />
 </Solution>

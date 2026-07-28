@@ -16,6 +16,10 @@ var brandDetectionServiceUrl = Environment.GetEnvironmentVariable("BRAND_DETECTI
     ?? builder.Configuration["BrandDetectionServiceUrl"]
     ?? throw new InvalidOperationException("BrandDetectionServiceUrl bulunamadı.");
 
+var storeReferenceServiceUrl = Environment.GetEnvironmentVariable("STORE_REFERENCE_SERVICE_URL")
+    ?? builder.Configuration["StoreReferenceServiceUrl"]
+    ?? throw new InvalidOperationException("StoreReferenceServiceUrl bulunamadı.");
+
 var redisConnection = Environment.GetEnvironmentVariable("REDIS_CONNECTION")
     ?? builder.Configuration["Redis:ConnectionString"]
     ?? throw new InvalidOperationException("Redis connection string bulunamadı.");
@@ -28,6 +32,11 @@ builder.Services.AddHttpClient<IProductServiceClient, ProductServiceClient>(clie
 builder.Services.AddHttpClient<IBrandDetectionServiceClient, BrandDetectionServiceClient>(client =>
 {
     client.BaseAddress = new Uri(brandDetectionServiceUrl);
+});
+
+builder.Services.AddHttpClient<IStoreReferenceServiceClient, StoreReferenceServiceClient>(client =>
+{
+    client.BaseAddress = new Uri(storeReferenceServiceUrl);
 });
 
 var redisOptions = ConfigurationOptions.Parse(redisConnection);

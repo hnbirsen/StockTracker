@@ -1,8 +1,9 @@
 namespace StockTracker.Shared.Contracts.Messages.V1;
 
 // v1 sözleşmesi: breaking değişiklik gerekirse yeni tip V2 namespace'inde eklenir, bu tip değişmez.
-// StoreId, Store Reference Service (Faz 2.3) devreye girene kadar null'dur — City/District ham metin
-// olarak taşınır; scraper o zamana kadar sadece online stok kontrolü yapar.
+// StoreId, Search Orchestrator'ın Store Reference Service'ten çözdüğü gerçek mağaza ID'sidir;
+// o il/ilçe için kayıtlı mağaza yoksa null kalır ve scraper sadece online stok kontrolü yapar.
+// City/District her durumda ham metin olarak taşınır.
 public record CheckStockCommand(
     Guid CommandId,
     string ProductCode,

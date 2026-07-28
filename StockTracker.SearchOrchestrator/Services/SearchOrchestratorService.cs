@@ -14,17 +14,20 @@ public class SearchOrchestratorService : ISearchOrchestratorService
 {
     private readonly IProductServiceClient _productClient;
     private readonly IBrandDetectionServiceClient _brandDetectionClient;
+    private readonly IStoreReferenceServiceClient _storeReferenceClient;
     private readonly ISendEndpointProvider _sendEndpointProvider;
     private readonly ILogger<SearchOrchestratorService> _logger;
 
     public SearchOrchestratorService(
         IProductServiceClient productClient,
         IBrandDetectionServiceClient brandDetectionClient,
+        IStoreReferenceServiceClient storeReferenceClient,
         ISendEndpointProvider sendEndpointProvider,
         ILogger<SearchOrchestratorService> logger)
     {
         _productClient = productClient;
         _brandDetectionClient = brandDetectionClient;
+        _storeReferenceClient = storeReferenceClient;
         _sendEndpointProvider = sendEndpointProvider;
         _logger = logger;
     }
@@ -70,13 +73,26 @@ public class SearchOrchestratorService : ISearchOrchestratorService
 
         if (locations is null)
         {
-            await SendCheckStockCommandAsync(lookup, request.Size, city: null, district: null);
+            await SendCheckStockCommandAsync(lookup, request.Size, storeId: null, city: null, district: null);
         }
         else
         {
             foreach (var location in locations)
             {
-                await SendCheckStockCommandAsync(lookup, request.Size, location.City, location.District);
+                var stores = await _storeReferenceClient.GetStoresAsync(lookup.BrandId!.Value, location.City, location.District);
+
+                if (stores.Count == 0)
+                {
+                    // Store Reference'ta bu marka/il/ilçe için kayıtlı mağaza yok — StoreId'siz gönder,
+                    // scraper en azından online stok kontrolü yapabilsin (bkz. .claude/ARCHITECTURE.md).
+                    await SendCheckStockCommandAsync(lookup, request.Size, storeId: null, location.City, location.District);
+                    continue;
+                }
+
+                foreach (var store in stores)
+                {
+                    await SendCheckStockCommandAsync(lookup, request.Size, store.Id, location.City, location.District);
+                }
             }
         }
 
@@ -88,7 +104,7 @@ public class SearchOrchestratorService : ISearchOrchestratorService
         );
     }
 
-    private async Task SendCheckStockCommandAsync(ProductLookupResponse lookup, string size, string? city, string? district)
+    private async Task SendCheckStockCommandAsync(ProductLookupResponse lookup, string size, Guid? storeId, string? city, string? district)
     {
         var queueName = QueueNaming.StockCheckQueue(lookup.ScraperQueueName!);
         var sendEndpoint = await _sendEndpointProvider.GetSendEndpoint(new Uri($"queue:{queueName}"));
@@ -99,15 +115,15 @@ public class SearchOrchestratorService : ISearchOrchestratorService
             BrandId: lookup.BrandId!.Value,
             BrandName: lookup.BrandName!,
             Size: size,
-            StoreId: null,
+            StoreId: storeId,
             City: city,
             District: district,
             RequestedAt: DateTime.UtcNow
         ));
 
         _logger.LogInformation(
-            "CheckStockCommand gönderildi — queue: {Queue}, product: {ProductCode}, city: {City}, district: {District}",
-            queueName, lookup.ProductCode, city, district);
+            "CheckStockCommand gönderildi — queue: {Queue}, product: {ProductCode}, storeId: {StoreId}, city: {City}, district: {District}",
+            queueName, lookup.ProductCode, storeId, city, district);
     }
 
     private static string ConfidenceLevelName(int confidence) => confidence switch
