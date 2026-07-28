@@ -63,7 +63,7 @@ flowchart LR
 | StockTracker.Subscription | 5006 | Watch groups, tracking list, deduplication | 🔜 Planned |
 | StockTracker.Billing | 5007 | Freemium plans, iyzico/Paddle integration | 🔜 Planned |
 | StockTracker.Notification | 5008 | FCM push + email notifications | 🔜 Planned |
-| StockTracker.Shared.Contracts | — | Shared DTOs and inter-service message models | 🔜 In use |
+| StockTracker.Shared.Contracts | — | Shared DTOs, RabbitMQ message contracts (`CheckStockCommand`, `StockResultEvent`) and MassTransit setup | ✅ In use |
 
 ## Implementation Status
 
@@ -75,6 +75,8 @@ flowchart LR
 | Identity Service (register, login, JWT, refresh token) | ✅ Done |
 | Product Service (lookup, brand mapping, Redis cache) | ✅ Done |
 | Brand Detection Service (regex format matching) | ✅ Done |
+| Redis cache metrics + invalidation (Product Service) | ✅ Done |
+| RabbitMQ message contracts + MassTransit setup (Shared.Contracts) | ✅ Done |
 | Store Reference Service | 🔜 Planned |
 | Search Orchestrator + RabbitMQ integration | 🔜 Planned |
 | Bershka Scraper | 🔜 Planned |
@@ -194,8 +196,10 @@ done
 | Method | Path | Description |
 | --- | --- | --- |
 | GET | `/lookup/{productCode}` | Resolve brand for a product code (cache → DB) |
-| POST | `/mappings` | Save a resolved brand mapping |
+| POST | `/mappings` | Save a resolved brand mapping (invalidates cache entry) |
 | GET | `/brands` | List all active brands |
+| GET | `/cache/metrics` | Cache hit/miss counts and hit rate |
+| DELETE | `/cache/{code}` | Manually evict a product code's cache entry (debug/test) |
 | GET | `/health` | Health check |
 
 **Lookup response (resolved):**
@@ -278,8 +282,9 @@ All secrets are provided via environment variables, never hardcoded in `appsetti
 | --- | --- |
 | `POSTGRES_USER` | Docker Compose |
 | `POSTGRES_PASSWORD` | Docker Compose |
-| `RABBITMQ_USER` | Docker Compose |
-| `RABBITMQ_PASSWORD` | Docker Compose |
+| `RABBITMQ_USER` | Docker Compose, all services (MassTransit) |
+| `RABBITMQ_PASSWORD` | Docker Compose, all services (MassTransit) |
+| `RABBITMQ_HOST` | All services (MassTransit) — defaults to `localhost` |
 | `IDENTITY_DB_CONNECTION` | Identity Service |
 | `JWT_SECRET_KEY` | Identity Service |
 | `JWT_ISSUER` | Identity Service |
@@ -307,6 +312,8 @@ GitHub Actions workflow at `.github/workflows/ci.yml` runs on every push to `mai
 - All `appsettings.json` files use `"REPLACE_WITH_ENV"` as a placeholder for secrets.
 - RabbitMQ management UI is available at `http://localhost:15672`.
 - PostgreSQL databases are created by `docker/postgres-init/init-multiple-dbs.sh` on first container start.
+- MassTransit is pinned to `8.5.5` in `StockTracker.Shared.Contracts` — v9+ requires a commercial license, so do not bump past the 8.x line without re-checking licensing.
+- Message contracts live in `StockTracker.Shared.Contracts/Messages/V1/` and are wired up per-service via `AddStockTrackerRabbitMq(...)`. Queue naming follows `QueueNaming.StockCheckQueue(brandName)` → `stock.check.{brandName}`, one isolated queue per brand.
 
 ## Project Structure
 
