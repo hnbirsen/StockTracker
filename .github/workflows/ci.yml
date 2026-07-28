@@ -5,9 +5,9 @@ name: CI — Build & Test
 # - herhangi bir branch'ten main'e PR açıldığında
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build-and-test:
@@ -15,15 +15,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Repo'yu indir
-      - name: Checkout code 
-        uses: actions/checkout@v4
+      # 1. Repo'yu indir (Node 24 uyumlu patch sürümü)
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
 
       # 2. .NET SDK'yı kur
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v4.3.0
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: "10.0.x"
 
       # 3. Bağımlılıkları yükle (NuGet paketleri)
       - name: Restore dependencies
@@ -41,7 +41,7 @@ jobs:
   docker-build:
     name: Docker Build Check
     runs-on: ubuntu-latest
-    needs: build-and-test  # Önce build-and-test başarılı olmalı
+    needs: build-and-test # Önce build-and-test başarılı olmalı
 
     steps:
       # Node 24 uyumlu ve güncel checkout eylemi
