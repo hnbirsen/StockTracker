@@ -50,7 +50,7 @@ jobs:
 
       # Docker bileşenlerini güncel tutmak ve tam uyumluluk sağlamak için
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # Docker Compose'un geçerli bir YAML olup olmadığını kontrol et
       - name: Validate docker-compose.yml
