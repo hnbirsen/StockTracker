@@ -73,7 +73,7 @@ public class SearchOrchestratorService : ISearchOrchestratorService
 
         if (locations is null)
         {
-            await SendCheckStockCommandAsync(lookup, request.Size, storeId: null, city: null, district: null);
+            await SendCheckStockCommandAsync(lookup, request.Size, storeId: null, brandSpecificStoreId: null, city: null, district: null);
         }
         else
         {
@@ -85,13 +85,13 @@ public class SearchOrchestratorService : ISearchOrchestratorService
                 {
                     // Store Reference'ta bu marka/il/ilçe için kayıtlı mağaza yok — StoreId'siz gönder,
                     // scraper en azından online stok kontrolü yapabilsin (bkz. .claude/ARCHITECTURE.md).
-                    await SendCheckStockCommandAsync(lookup, request.Size, storeId: null, location.City, location.District);
+                    await SendCheckStockCommandAsync(lookup, request.Size, storeId: null, brandSpecificStoreId: null, location.City, location.District);
                     continue;
                 }
 
                 foreach (var store in stores)
                 {
-                    await SendCheckStockCommandAsync(lookup, request.Size, store.Id, location.City, location.District);
+                    await SendCheckStockCommandAsync(lookup, request.Size, store.Id, store.BrandSpecificStoreId, location.City, location.District);
                 }
             }
         }
@@ -104,7 +104,7 @@ public class SearchOrchestratorService : ISearchOrchestratorService
         );
     }
 
-    private async Task SendCheckStockCommandAsync(ProductLookupResponse lookup, string size, Guid? storeId, string? city, string? district)
+    private async Task SendCheckStockCommandAsync(ProductLookupResponse lookup, string size, Guid? storeId, string? brandSpecificStoreId, string? city, string? district)
     {
         var queueName = QueueNaming.StockCheckQueue(lookup.ScraperQueueName!);
         var sendEndpoint = await _sendEndpointProvider.GetSendEndpoint(new Uri($"queue:{queueName}"));
@@ -116,6 +116,7 @@ public class SearchOrchestratorService : ISearchOrchestratorService
             BrandName: lookup.BrandName!,
             Size: size,
             StoreId: storeId,
+            BrandSpecificStoreId: brandSpecificStoreId,
             City: city,
             District: district,
             RequestedAt: DateTime.UtcNow
