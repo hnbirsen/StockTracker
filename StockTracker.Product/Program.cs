@@ -46,6 +46,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(
 
 builder.Services.AddScoped<ICodeFormatDetector, CodeFormatDetector>();
 builder.Services.AddScoped<IProductLookupService, ProductLookupService>();
+builder.Services.AddSingleton<ICacheMetricsService, CacheMetricsService>();
 
 var app = builder.Build();
 

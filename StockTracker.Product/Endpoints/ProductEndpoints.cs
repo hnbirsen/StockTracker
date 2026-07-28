@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using StockTracker.Product.Data;
 using StockTracker.Product.DTOs;
 using StockTracker.Product.Services;
+using StackExchange.Redis;
 
 namespace StockTracker.Product.Endpoints;
 
@@ -10,12 +11,14 @@ public static class ProductEndpoints
     public static void MapProductEndpoints(this WebApplication app)
     {
         // Ürün kodu ile marka sorgula
-        app.MapGet("/lookup/{productCode}", async (string productCode, IProductLookupService lookupService) =>
+        // Query string kullanıyoruz çünkü ürün kodu slash içerebilir (örn. 12345/678/123)
+        // GET /lookup?code=12345/678/123
+        app.MapGet("/lookup/{**code}", async (string code, IProductLookupService lookupService) =>
         {
-            if (string.IsNullOrWhiteSpace(productCode))
+            if (string.IsNullOrWhiteSpace(code))
                 return Results.BadRequest("Ürün kodu boş olamaz.");
 
-            var result = await lookupService.LookupAsync(productCode);
+            var result = await lookupService.LookupAsync(code);
             return Results.Ok(result);
         });
 
@@ -41,6 +44,22 @@ public static class ProductEndpoints
                 .ToListAsync();
 
             return Results.Ok(brands);
+        });
+
+        // Cache metriklerini görüntüle
+        app.MapGet("/cache/metrics", async (ICacheMetricsService metrics) =>
+        {
+            var summary = await metrics.GetSummaryAsync();
+            return Results.Ok(summary);
+        });
+
+        // Belirli bir ürün kodunun cache'ini manuel temizle (test/debug amaçlı)
+        // DELETE /cache?code=12345/678/123
+        app.MapDelete("/cache/{**code}", async (string code, IConnectionMultiplexer redis) =>
+        {
+            var cache = redis.GetDatabase();
+            await cache.KeyDeleteAsync($"product:lookup:{code.Trim()}");
+            return Results.NoContent();
         });
 
         app.MapGet("/health", () => Results.Ok("OK"));
