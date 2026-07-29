@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\StockTracker.Shared.Contracts\StockTracker.Shared.Contracts.csproj" />
+    <ProjectReference Include="..\StockTracker.Shared.Scraping\StockTracker.Shared.Scraping.csproj" />
   </ItemGroup>
 
   <ItemGroup>

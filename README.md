@@ -71,6 +71,7 @@ flowchart LR
 | StockTracker.Notification | 5008 | FCM push + email notifications | 🔜 Planned |
 | StockTracker.BershkaScraper | 5009 | Consumes `CheckStockCommand`, publishes `StockResultEvent` | ✅ Done — real Bershka/Inditex API wired up |
 | StockTracker.Shared.Contracts | — | Shared DTOs, RabbitMQ message contracts (`CheckStockCommand`, `StockResultEvent`) and MassTransit setup | ✅ In use |
+| StockTracker.Shared.Scraping | — | Cross-scraper shared library — Redis-backed `IScraperHealthLogService` (success rate + HTTP status distribution per scraper, no per-scraper database) | ✅ In use |
 
 ## Implementation Status
 
@@ -87,7 +88,7 @@ flowchart LR
 | Store Reference Service (Bershka seed data) | ✅ Done |
 | Search Orchestrator + RabbitMQ integration | ✅ Done |
 | Bershka Scraper (consumer, Polly, UA rotation, real Bershka/Inditex stock + store-locator API, `StockResultEvent` publish) | ✅ Done |
-| Scraper Health Monitoring | 🔜 Planned |
+| Scraper Health Monitoring (`GET /health/scraper-stats`, Redis-backed, shared across future scrapers) | ✅ Done |
 | Subscription Service (watch groups) | 🔜 Planned |
 | Stock Poller (Quartz.NET/Hangfire) | 🔜 Planned |
 | Notification Service (FCM + email) | 🔜 Planned |
@@ -411,6 +412,7 @@ GitHub Actions workflow at `.github/workflows/ci.yml` runs on every push to `mai
 ├── StockTracker.Notification/
 ├── StockTracker.BershkaScraper/
 ├── StockTracker.Shared.Contracts/
+├── StockTracker.Shared.Scraping/
 ├── tests/                       # xUnit test projects, one per service
 ├── docker-compose.yml
 └── StockTracker.slnx

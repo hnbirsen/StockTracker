@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using StackExchange.Redis;
+using StockTracker.Shared.Scraping.Health;
 
 namespace StockTracker.BershkaScraper.Services;
 
@@ -36,23 +38,28 @@ namespace StockTracker.BershkaScraper.Services;
 // ürüne yapılan art arda aramalar (farklı il/ilçe, farklı kullanıcı) Playwright'ı tekrar tetiklemez.
 public class BershkaStockApiClient : IBershkaStockApiClient
 {
+    private const string ScraperName = "bershka";
+
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(15);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _stockApiClient;
     private readonly IBershkaPdpFetcher _pdpFetcher;
     private readonly IConnectionMultiplexer _redis;
+    private readonly IScraperHealthLogService _healthLog;
     private readonly ILogger<BershkaStockApiClient> _logger;
 
     public BershkaStockApiClient(
         HttpClient httpClient,
         IBershkaPdpFetcher pdpFetcher,
         IConnectionMultiplexer redis,
+        IScraperHealthLogService healthLog,
         ILogger<BershkaStockApiClient> logger)
     {
         _stockApiClient = httpClient;
         _pdpFetcher = pdpFetcher;
         _redis = redis;
+        _healthLog = healthLog;
         _logger = logger;
     }
 
@@ -108,7 +115,14 @@ public class BershkaStockApiClient : IBershkaStockApiClient
         {
             var requestUri = $"/ocpstiencom-external/common/1/stock/campaign/{Uri.EscapeDataString(campaignId)}/product/part-number/{Uri.EscapeDataString(digits)}?physicalStoreId={Uri.EscapeDataString(brandSpecificStoreId)}";
 
+            var stopwatch = Stopwatch.StartNew();
             var response = await _stockApiClient.GetAsync(requestUri, cancellationToken);
+            await _healthLog.LogAttemptAsync(
+                ScraperName, "StockApi", response.IsSuccessStatusCode, (int)response.StatusCode,
+                errorMessage: response.IsSuccessStatusCode ? null : $"HTTP {(int)response.StatusCode}",
+                context: $"{productUrl} | store={brandSpecificStoreId} partNumber={digits}",
+                (int)stopwatch.ElapsedMilliseconds, cancellationToken);
+
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Bershka stok API'si beklenmeyen durum kodu döndürdü: {StatusCode} ({Uri})", response.StatusCode, requestUri);

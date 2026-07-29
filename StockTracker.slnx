@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="StockTracker.Shared.Contracts/StockTracker.Shared.Contracts.csproj" />
+  <Project Path="StockTracker.Shared.Scraping/StockTracker.Shared.Scraping.csproj" />
   <Project Path="StockTracker.Billing/StockTracker.Billing.csproj" />
   <Project Path="StockTracker.BershkaScraper/StockTracker.BershkaScraper.csproj" />
   <Project Path="StockTracker.BrandDetection/StockTracker.BrandDetection.csproj" />
@@ -16,4 +17,5 @@
   <Project Path="tests/StockTracker.BrandDetection.Tests/StockTracker.BrandDetection.Tests.csproj" />
   <Project Path="tests/StockTracker.StoreReference.Tests/StockTracker.StoreReference.Tests.csproj" />
   <Project Path="tests/StockTracker.BershkaScraper.Tests/StockTracker.BershkaScraper.Tests.csproj" />
+  <Project Path="tests/StockTracker.Shared.Scraping.Tests/StockTracker.Shared.Scraping.Tests.csproj" />
 </Solution>

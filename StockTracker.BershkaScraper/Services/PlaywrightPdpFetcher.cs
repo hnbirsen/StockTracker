@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Microsoft.Playwright;
+using StockTracker.Shared.Scraping.Health;
 
 namespace StockTracker.BershkaScraper.Services;
 
@@ -87,18 +89,25 @@ public class PlaywrightPdpFetcher : IBershkaPdpFetcher, IAsyncDisposable
         }
         """;
 
+    private const string ScraperName = "bershka";
+
     private readonly SemaphoreSlim _initLock = new(1, 1);
+    private readonly IScraperHealthLogService _healthLog;
     private readonly ILogger<PlaywrightPdpFetcher> _logger;
     private IPlaywright? _playwright;
     private IBrowser? _browser;
 
-    public PlaywrightPdpFetcher(ILogger<PlaywrightPdpFetcher> logger)
+    public PlaywrightPdpFetcher(IScraperHealthLogService healthLog, ILogger<PlaywrightPdpFetcher> logger)
     {
+        _healthLog = healthLog;
         _logger = logger;
     }
 
     public async Task<string?> FetchProductSizesJsonAsync(string productUrl, CancellationToken cancellationToken)
     {
+        var stopwatch = Stopwatch.StartNew();
+        int? httpStatusCode = null;
+
         try
         {
             var browser = await GetBrowserAsync(cancellationToken);
@@ -121,20 +130,32 @@ public class PlaywrightPdpFetcher : IBershkaPdpFetcher, IAsyncDisposable
 
             var page = await context.NewPageAsync();
 
-            await page.GotoAsync(productUrl, new PageGotoOptions
+            var response = await page.GotoAsync(productUrl, new PageGotoOptions
             {
                 WaitUntil = WaitUntilState.DOMContentLoaded,
                 Timeout = 30000
             });
+            httpStatusCode = response?.Status;
             // 3sn yetersiz kaldı (gerçek veriyle doğrulandı) — ağır ürün sayfalarında tüm renk/beden
             // verisi hydrate olmadan içerik okunuyordu (ör. jean sayfasında 7 bedenden sadece 1'i vardı).
             await page.WaitForTimeoutAsync(8000);
 
-            return await page.EvaluateAsync<string?>(ExtractSizesScript);
+            var sizesJson = await page.EvaluateAsync<string?>(ExtractSizesScript);
+
+            await _healthLog.LogAttemptAsync(
+                ScraperName, "PlaywrightPdp", success: sizesJson is not null, httpStatusCode,
+                errorMessage: sizesJson is null ? "Beden verisi çıkarılamadı (Vue ağacında bulunamadı)" : null,
+                context: productUrl,
+                (int)stopwatch.ElapsedMilliseconds, cancellationToken);
+
+            return sizesJson;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning(ex, "Playwright ile ürün sayfası ({Url}) alınamadı.", productUrl);
+            await _healthLog.LogAttemptAsync(
+                ScraperName, "PlaywrightPdp", success: false, httpStatusCode,
+                errorMessage: ex.Message, context: productUrl, (int)stopwatch.ElapsedMilliseconds, cancellationToken);
             return null;
         }
     }

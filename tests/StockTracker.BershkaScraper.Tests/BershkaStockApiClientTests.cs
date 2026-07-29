@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using StackExchange.Redis;
 using StockTracker.BershkaScraper.Services;
+using StockTracker.Shared.Scraping.Health;
 
 namespace StockTracker.BershkaScraper.Tests;
 
@@ -41,7 +42,12 @@ public class BershkaStockApiClientTests
         var redis = new Mock<IConnectionMultiplexer>();
         redis.Setup(r => r.GetDatabase(It.IsAny<int>(), It.IsAny<object>())).Returns(redisDb.Object);
 
-        var sut = new BershkaStockApiClient(stockHttpClient, pdpFetcher.Object, redis.Object, Mock.Of<ILogger<BershkaStockApiClient>>());
+        var healthLog = new Mock<IScraperHealthLogService>();
+        healthLog.Setup(h => h.LogAttemptAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int?>(),
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+        var sut = new BershkaStockApiClient(stockHttpClient, pdpFetcher.Object, redis.Object, healthLog.Object, Mock.Of<ILogger<BershkaStockApiClient>>());
 
         return (sut, stockHandler, pdpFetcher, redisDb);
     }
