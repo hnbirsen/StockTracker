@@ -36,6 +36,9 @@ flowchart LR
     Gateway --> Notification[Notification :5008]
 
     Brand -->|internal HTTP| Product
+    Search -->|internal HTTP| Product
+    Search -->|internal HTTP| Brand
+    Search -->|internal HTTP| Store
 
     Identity -.-> PG[(PostgreSQL)]
     Product -.-> PG
@@ -46,8 +49,11 @@ flowchart LR
     Notification -.-> PG
 
     Product -.-> Redis[(Redis)]
+    Search -.-> Redis
     Search -.-> MQ[(RabbitMQ)]
     Notification -.-> MQ
+    MQ -.-> Scraper[BershkaScraper :5009]
+    Scraper -.-> MQ
 ```
 
 ## Services
@@ -63,6 +69,7 @@ flowchart LR
 | StockTracker.Subscription | 5006 | Watch groups, tracking list, deduplication | 🔜 Planned |
 | StockTracker.Billing | 5007 | Freemium plans, iyzico/Paddle integration | 🔜 Planned |
 | StockTracker.Notification | 5008 | FCM push + email notifications | 🔜 Planned |
+| StockTracker.BershkaScraper | 5009 | Consumes `CheckStockCommand`, publishes `StockResultEvent` | ✅ Done — real Bershka/Inditex API wired up |
 | StockTracker.Shared.Contracts | — | Shared DTOs, RabbitMQ message contracts (`CheckStockCommand`, `StockResultEvent`) and MassTransit setup | ✅ In use |
 
 ## Implementation Status
@@ -79,7 +86,7 @@ flowchart LR
 | RabbitMQ message contracts + MassTransit setup (Shared.Contracts) | ✅ Done |
 | Store Reference Service (Bershka seed data) | ✅ Done |
 | Search Orchestrator + RabbitMQ integration | ✅ Done |
-| Bershka Scraper | 🔜 Planned |
+| Bershka Scraper (consumer, Polly, UA rotation, real Bershka/Inditex stock + store-locator API, `StockResultEvent` publish) | ✅ Done |
 | Scraper Health Monitoring | 🔜 Planned |
 | Subscription Service (watch groups) | 🔜 Planned |
 | Stock Poller (Quartz.NET/Hangfire) | 🔜 Planned |
@@ -101,7 +108,7 @@ flowchart LR
 | Messaging | RabbitMQ 3 |
 | Password hashing | BCrypt.Net |
 | Authentication | JWT Bearer tokens |
-| Scraping | Playwright (planned) |
+| Scraping | Playwright (real Chrome channel, Bershka Scraper) |
 | Web frontend | React (planned) |
 | Mobile | React Native + Expo (planned) |
 | Payment | iyzico / Paddle (planned) |
@@ -126,6 +133,8 @@ dotnet restore StockTracker.slnx
 
 The PostgreSQL init script at `docker/postgres-init/init-multiple-dbs.sh` creates all seven databases automatically on first container start. It reads database names from the `POSTGRES_MULTIPLE_DATABASES` environment variable defined in `docker-compose.yml`.
 
+**One extra one-time step if you'll run `StockTracker.BershkaScraper`:** it drives a real Chrome via Playwright (see Development Notes below — the bundled Chromium gets blocked, a real Chrome channel is required), and `dotnet restore` does not download the browser binary. Build the project once, then run the Playwright browser install (`chrome` channel, not `chromium`) — see `.claude/ENVIRONMENT_SETUP.md` → "Bershka Scraper — Playwright/Chrome Kurulumu" for exact commands. This step isn't visible from a fresh clone because it lands in the gitignored `bin/` folder, so it's easy to miss — do it before your first `dotnet run --project StockTracker.BershkaScraper`.
+
 ## Running the Project
 
 Each service runs on a fixed port. Open a separate terminal for each:
@@ -140,6 +149,7 @@ dotnet run --project StockTracker.SearchOrchestrator # :5005
 dotnet run --project StockTracker.Subscription      # :5006
 dotnet run --project StockTracker.Billing           # :5007
 dotnet run --project StockTracker.Notification      # :5008
+dotnet run --project StockTracker.BershkaScraper    # :5009 (RabbitMQ consumer only, no HTTP endpoints besides /health)
 ```
 
 When working on a single service, bring up only the infrastructure and run that service from your IDE:
@@ -153,7 +163,7 @@ Health check all services:
 
 ```bash
 curl http://localhost:8000/health/gateway
-for port in 5001 5002 5003 5004 5005 5006 5007 5008; do
+for port in 5001 5002 5003 5004 5005 5006 5007 5008 5009; do
   echo -n ":$port → " && curl -s http://localhost:$port/health
   echo
 done
@@ -278,7 +288,7 @@ done
   }
 ]
 ```
-Seed data currently covers Bershka only (4 stores across Istanbul/Ankara/Izmir) — `brandSpecificStoreId` values are placeholders pending real scraper data (Faz 2.4).
+Seed data currently covers Bershka only (4 stores across Istanbul/Ankara/Izmir) — `brandSpecificStoreId` values are now real Bershka store IDs from the store-locator API (e.g. `16884` for City's Kozyatağı in Kadıköy), applied via the `UpdateBershkaStoresWithRealIds` migration. See `.claude/DATABASE.md` for the full mapping.
 
 ### Search Orchestrator (`:5005`)
 
@@ -357,6 +367,7 @@ All secrets are provided via environment variables, never hardcoded in `appsetti
 | `BRAND_DETECTION_SERVICE_URL` | Search Orchestrator (internal HTTP) |
 | `STORE_REFERENCE_SERVICE_URL` | Search Orchestrator (internal HTTP) |
 | `STORE_DB_CONNECTION` | Store Reference Service |
+| `BERSHKA_STOCK_API_BASE_URL` | Bershka Scraper — `https://api.inditex.com` (stock query endpoint) |
 
 Copy `.env example` to `.env` and fill in the values. The `.env` file is gitignored.
 
@@ -378,6 +389,7 @@ GitHub Actions workflow at `.github/workflows/ci.yml` runs on every push to `mai
 - PostgreSQL databases are created by `docker/postgres-init/init-multiple-dbs.sh` on first container start.
 - MassTransit is pinned to `8.5.5` in `StockTracker.Shared.Contracts` — v9+ requires a commercial license, so do not bump past the 8.x line without re-checking licensing.
 - Message contracts live in `StockTracker.Shared.Contracts/Messages/V1/` and are wired up per-service via `AddStockTrackerRabbitMq(...)`. Queue naming follows `QueueNaming.StockCheckQueue(brandName)` → `stock.check.{brandName}`, one isolated queue per brand.
+- **Bershka Scraper reads real per-size stock data from the product page itself** — Bershka's product pages are behind Akamai Bot Manager, so a plain `HttpClient` can never load them, and even Playwright's bundled Chromium gets an instant "Access Denied"; `PlaywrightPdpFetcher` drives a real Chrome channel instead. Rather than parsing the page's minified JS as text (unreliable — some pages hoist string values into shared variables, so the real value is never written as a literal), it walks the page's live Vue component tree (`page.EvaluateAsync`) to read the already-resolved size/stock/part-number data straight from JS runtime state. Results are cached in Redis per product URL (15 min TTL) so repeated searches for the same product don't re-trigger Playwright. The store-specific physical stock check then queries `api.inditex.com/.../stock/campaign/...` with the real part-number read from the page. **Requires a one-time Playwright Chrome-channel install per machine** — see `.claude/ENVIRONMENT_SETUP.md` and the Setup section above. Full details, the productCode-format pitfalls that led here, and known limitations are in `.claude/ARCHITECTURE.md` → Bershka Scraper.
 
 ## Project Structure
 
@@ -397,7 +409,9 @@ GitHub Actions workflow at `.github/workflows/ci.yml` runs on every push to `mai
 ├── StockTracker.Subscription/
 ├── StockTracker.Billing/
 ├── StockTracker.Notification/
+├── StockTracker.BershkaScraper/
 ├── StockTracker.Shared.Contracts/
+├── tests/                       # xUnit test projects, one per service
 ├── docker-compose.yml
 └── StockTracker.slnx
 ```
