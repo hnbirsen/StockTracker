@@ -14,5 +14,7 @@ REDIS_CONNECTION=[REDIS_CONNECTION]
 STORE_DB_CONNECTION=Host=[Host];Port=[Port];Database=[Database];Username=[Username];Password=[Password]
 STORE_REFERENCE_SERVICE_URL=[STORE_REFERENCE_SERVICE_URL]
 
+SUBSCRIPTION_DB_CONNECTION=Host=[Host];Port=[Port];Database=[Database];Username=[Username];Password=[Password]
+
 BERSHKA_STOCK_API_BASE_URL=https://api.inditex.com
 

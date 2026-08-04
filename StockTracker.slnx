@@ -18,4 +18,5 @@
   <Project Path="tests/StockTracker.StoreReference.Tests/StockTracker.StoreReference.Tests.csproj" />
   <Project Path="tests/StockTracker.BershkaScraper.Tests/StockTracker.BershkaScraper.Tests.csproj" />
   <Project Path="tests/StockTracker.Shared.Scraping.Tests/StockTracker.Shared.Scraping.Tests.csproj" />
+  <Project Path="tests/StockTracker.Subscription.Tests/StockTracker.Subscription.Tests.csproj" />
 </Solution>

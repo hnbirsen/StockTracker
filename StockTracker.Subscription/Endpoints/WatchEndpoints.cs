@@ -1,0 +1,48 @@
+using StockTracker.Subscription.DTOs;
+using StockTracker.Subscription.Services;
+
+namespace StockTracker.Subscription.Endpoints;
+
+public static class WatchEndpoints
+{
+    public static void MapWatchEndpoints(this WebApplication app)
+    {
+        // POST /watches — mevcut WatchGroup varsa (aynı ürün+beden+mağaza) ona bağlanır, yoksa yeni oluşturur.
+        app.MapPost("/watches", async (CreateWatchRequest request, IWatchService service) =>
+        {
+            if (request.UserId == Guid.Empty)
+                return Results.BadRequest("UserId boş olamaz.");
+
+            if (string.IsNullOrWhiteSpace(request.ProductCode))
+                return Results.BadRequest("Ürün kodu boş olamaz.");
+
+            if (string.IsNullOrWhiteSpace(request.Size))
+                return Results.BadRequest("Beden boş olamaz.");
+
+            var watch = await service.CreateWatchAsync(request);
+            return Results.Created($"/watches/{watch.UserWatchId}", watch);
+        });
+
+        // GET /watches?userId= — kullanıcının takip listesi
+        app.MapGet("/watches", async (Guid userId, IWatchService service) =>
+        {
+            if (userId == Guid.Empty)
+                return Results.BadRequest("userId boş olamaz.");
+
+            var watches = await service.GetWatchesAsync(userId);
+            return Results.Ok(watches);
+        });
+
+        // DELETE /watches/{id}?userId= — userId ile sahiplik doğrulanır, başkasının takibi silinemez
+        app.MapDelete("/watches/{id:guid}", async (Guid id, Guid userId, IWatchService service) =>
+        {
+            if (userId == Guid.Empty)
+                return Results.BadRequest("userId boş olamaz.");
+
+            var deleted = await service.DeleteWatchAsync(id, userId);
+            return deleted ? Results.NoContent() : Results.NotFound();
+        });
+
+        app.MapGet("/health", () => Results.Ok("OK"));
+    }
+}

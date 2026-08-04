@@ -66,7 +66,7 @@ flowchart LR
 | StockTracker.BrandDetection | 5003 | Regex format matching, manual brand selection | ✅ Done |
 | StockTracker.StoreReference | 5004 | City/district → brand-specific store ID mapping | ✅ Done |
 | StockTracker.SearchOrchestrator | 5005 | Routes user queries to scraper queues, throttling | ✅ Done |
-| StockTracker.Subscription | 5006 | Watch groups, tracking list, deduplication | 🔜 Planned |
+| StockTracker.Subscription | 5006 | Watch groups, tracking list, deduplication | ✅ Done — watch group model (Faz 3.1); poller/notifications still planned |
 | StockTracker.Billing | 5007 | Freemium plans, iyzico/Paddle integration | 🔜 Planned |
 | StockTracker.Notification | 5008 | FCM push + email notifications | 🔜 Planned |
 | StockTracker.BershkaScraper | 5009 | Consumes `CheckStockCommand`, publishes `StockResultEvent` | ✅ Done — real Bershka/Inditex API wired up |
@@ -90,7 +90,7 @@ flowchart LR
 | Bershka Scraper (consumer, Polly, UA rotation, real Bershka/Inditex stock + store-locator API, `StockResultEvent` publish) | ✅ Done |
 | Scraper Health Monitoring (`GET /health/scraper-stats`, `GET /health/scraper-failures`, Redis-backed, shared across future scrapers) | ✅ Done |
 | Scraper scalability & bot-detection hardening (host rate limiting, 429/`Retry-After`, bot-detection circuit breaker, realistic header profiles) | ✅ Done — proxy/IP rotation deferred (needs a paid provider, see ROADMAP Faz 7) |
-| Subscription Service (watch groups) | 🔜 Planned |
+| Subscription Service (watch groups, dedup, `POST`/`GET`/`DELETE /watches`) | ✅ Done |
 | Stock Poller (Quartz.NET/Hangfire) | 🔜 Planned |
 | Notification Service (FCM + email) | 🔜 Planned |
 | Billing Service (freemium + payment) | 🔜 Planned |
