@@ -1,0 +1,236 @@
+# MVP Yol Haritası
+
+Altı fazlık MVP planı, PM/analist seviyesinde granüler alt görevlerle.
+
+## Faz 0 — Altyapı ✅ Tamamlandı
+- [x] Docker Compose kurulumu (Mac)
+- [x] PostgreSQL — 7 ayrı veritabanı (`identity_db`, `product_db`, `brand_db`, `store_db`, `subscription_db`, `billing_db`, `notification_db`)
+- [x] Redis kurulumu
+- [x] RabbitMQ kurulumu
+- [x] PostgreSQL `CREATE DATABASE IF NOT EXISTS` desteklememe sorunu çözüldü
+- [x] YARP Gateway — 8 servis için route tanımı
+- [x] YARP transform çakışması çözümü (`PathPattern` ve `PathRemovePrefix` ayrı bloklara bölündü)
+- [x] GitHub Actions CI — build, test, docker compose validation
+
+## Faz 1 — Kimlik ve Ürün Çekirdeği
+
+### Faz 1.1 — Identity Service ✅ Tamamlandı
+- [x] EF Core migration'ları (`identity_db`) — `Users`, `RefreshTokens` tabloları
+- [x] Kayıt endpoint'i (`POST /auth/register`)
+- [x] Login endpoint'i (`POST /auth/login`) — JWT access + refresh token
+- [x] Refresh token rotation (`POST /auth/refresh`)
+- [x] Logout endpoint'i (`POST /auth/logout`) — refresh token invalidation
+- [x] BCrypt şifre hash'leme
+- [x] Secrets'ların environment variable'lara taşınması
+- [x] Gateway üzerinden uçtan uca test
+
+### Faz 1.2 — Product Service ✅ Tamamlandı
+- [x] EF Core migration'ları (`product_db`) — `Brands`, `ProductBrandMaps` tabloları
+- [x] Bershka seed data (`Brands` tablosuna)
+- [x] Format tespiti (`CodeFormatDetector`) — EAN-13, EAN-8, UPC, BrandSpecific, Unknown
+- [x] Ürün kodu lookup endpoint'i (`GET /lookup/{productCode}`)
+- [x] Marka mapping kaydetme endpoint'i (`POST /mappings`)
+- [x] Marka listesi endpoint'i (`GET /brands`)
+- [x] Redis cache entegrasyonu — cache-aside pattern, 24 saatlik TTL
+- [x] Gateway üzerinden uçtan uca test
+
+### Faz 1.3 — Brand Detection Service (Format İmzası Katmanı) ✅ Tamamlandı
+- [x] EF Core migration'ları (`brand_db`) — `BrandCodeSignatures` tablosu
+- [x] Bershka, Zara, Pull&Bear regex pattern seed data (confidence seviyeleriyle)
+- [x] Otomatik marka tespiti endpoint'i (`POST /resolve`) — regex pattern matching
+- [x] Manuel marka seçimi endpoint'i (`POST /resolve/manual`)
+- [x] Tek + yüksek güvenilirlikli eşleşmede Product Service'e otomatik kayıt
+- [x] Product Service'e internal HTTP client (`ProductServiceClient`) — gateway bypass, direkt servis iletişimi
+- [x] Gateway üzerinden uçtan uca test
+
+### Faz 1.4 — Redis Cache Optimizasyonu ✅ Tamamlandı
+- [x] Cache hit/miss oranını loglayan metrik (`CacheMetricsService`, Redis sayaçları) + `GET /cache/metrics` endpoint'i
+- [x] Cache invalidation senaryoları — `SaveMappingAsync` içinde mapping değiştiğinde otomatik `KeyDeleteAsync`; manuel temizleme için `DELETE /cache/{code}` endpoint'i eklendi (otomatik test projesi henüz yok, bkz. üstteki not)
+
+## Faz 2 — Scraper + Stok Akışı
+
+### Faz 2.1 — RabbitMQ Mesaj Sözleşmeleri ✅ Tamamlandı
+- [x] `CheckStockCommand` modeli (`Shared.Contracts/Messages/V1`)
+- [x] `StockResultEvent` modeli (`Shared.Contracts/Messages/V1`)
+- [x] Mesaj versiyonlama stratejisi — namespace bazlı (`Messages.V1`, breaking değişiklikte `V2` eklenir)
+- [x] Exchange/queue isimlendirme kuralı — `QueueNaming.StockCheckQueue(brandName)` → `stock.check.{brandName}`
+- [x] MassTransit + RabbitMQ transport kararı ve kurulum (`ServiceCollectionExtensions.AddStockTrackerRabbitMq`) — **önemli bulgu:** MassTransit v9+ ticari lisans gerektiriyor, proje son açık kaynak sürüm **8.5.5**'e sabitlendi (bkz. `.claude/ARCHITECTURE.md`)
+- [x] Publish/consume uçtan uca test — gerçek RabbitMQ'ya karşı manuel smoke-test ile doğrulandı (send → consume → publish → consume round-trip). Search Orchestrator/Scraper'ın gerçek iş mantığıyla kullanımı Faz 2.2/2.4'te yapılacak
+
+### Faz 2.2 — Search Orchestrator Servisi ✅ Tamamlandı
+- [x] `POST /search` endpoint'i (ürün kodu + beden + il/ilçe listesi) — `SearchEndpoints.cs`
+- [x] Marka biliniyorsa ilgili kuyruğa `CheckStockCommand` publish — her lokasyon için ayrı send, `stock.check.{brandQueue}`'a
+- [x] Marka bilinmiyorsa Brand Detection Service'e yönlendirme — `POST /resolve` çağrılır; tek+yüksek güven otomatik kaydedilirse tekrar `Product` sorgulanıp devam edilir, aksi halde adaylar döndürülür (manuel seçim `/api/brand-detection/resolve/manual` üzerinden)
+- [x] Asenkron response tasarımı — bilinen marka: 202 Accepted + "istek alındı, sonuç bildirimle gelecek"; marka bilinmiyor: 200 OK + aday listesi
+- [x] Aynı kullanıcıdan gelen tekrar isteği engelleyen throttle — Redis `search:throttle:{userId}:{productCode}:{size}`, 30 sn pencere, `429 Too Many Requests`
+- [x] Unit testler (`tests/StockTracker.SearchOrchestrator.Tests`, xUnit + Moq + FluentAssertions 7.x) — 7 test, tüm senaryolar (bilinen marka, çoklu lokasyon, marka bulunamadı, çoklu aday, tek-yüksek-güven auto-resolve, throttle) yeşil
+- [x] Gerçek altyapıya karşı uçtan uca manuel doğrulama: Product + BrandDetection + SearchOrchestrator birlikte çalıştırılıp gerçek RabbitMQ/Redis/Postgres'e karşı test edildi (Queued → kuyrukta mesaj, BrandUnknown → aday listesi, throttle → 429), sonrasında test verisi temizlendi
+
+### Faz 2.3 — Store Reference Service ✅ Tamamlandı
+- [x] `Stores` tablosu (`BrandId`, `BrandName`, `City`, `District`, `StoreName`, `BrandSpecificStoreId`) — `store_db`
+- [x] Bershka mağaza listesi manuel toplanıp seed data olarak yüklenir — 4 mağaza (Istanbul/Kadıköy, Istanbul/Şişli, Ankara/Çankaya, Izmir/Bornova); `BrandSpecificStoreId` değerleri yer tutucudur, Faz 2.4'te gerçek scraper verisiyle güncellenecek
+- [x] `GET /stores?brandId=&city=&district=` endpoint'i — tüm filtreler opsiyonel, case-insensitive city/district eşleşmesi
+- [x] Search Orchestrator entegrasyonu — konum verildiğinde `StoreReferenceServiceClient` ile gerçek `StoreId` çözülür; eşleşme yoksa `StoreId=null` ile fallback (online-only) komut gönderilir
+- [x] Unit testler (`tests/StockTracker.StoreReference.Tests` — 5 test) + Search Orchestrator testleri store-resolution senaryolarıyla güncellendi (2 yeni test)
+- [x] Gerçek altyapıya karşı uçtan uca doğrulama: Product + BrandDetection + StoreReference + SearchOrchestrator birlikte çalıştırıldı, seed'lenmiş Bershka/Kadıköy mağazasının gerçek `StoreId`'sinin `CheckStockCommand`'a doğru şekilde yansıdığı loglardan doğrulandı, ardından test verisi temizlendi
+
+### Faz 2.4 — Bershka Scraper Servisi ✅ Tamamlandı (canlı doğrulandı)
+- [x] Chrome ile Bershka iç API/PDP yapısı tespiti (`claude-in-chrome`, kullanıcı izniyle canlı inceleme) — ürün sayfasının (PDP) her beden için gerçek `partnumber`/`stock`/`mastersSizeId` bilgisi bulundu; ayrıca stok API'si (`api.inditex.com/.../stock/campaign/{campaignId}/product/part-number/...`) tespit edildi — bkz. `.claude/ARCHITECTURE.md` → Bershka Scraper
+- [x] **İlk tasarım terk edildi**: `productCode`+beden'den kendimiz part-number inşa etme fikri gerçek verilerle iki kez yanlış çıktı — kategoriye göre değişen önek hanesi (giyim `0`, ayakkabı `1`) ve alfabetik bedenlerde ürüne özgü, tahmin edilemeyen sıra numarası. Nihai tasarım: kod hiçbir id üretmiyor, PDP'den Bershka'nın kendi hesapladığı gerçek veriyi okuyor.
+- [x] **`CheckStockCommand` V2** (`Messages.V2`, V1 değişmedi) — `ProductUrl` alanı eklendi (Product Service'in `ProductBrandMap.ProductUrl`'ünden), PDP'yi çekebilmek için gerekli. Search Orchestrator V2 gönderiyor, BershkaScraper V2 tüketiyor; `ProductUrl` boşsa (regex-only çözümlerde olur) API client'a hiç gidilmeden `Unknown` (`no-product-url`) dönülüyor.
+- [x] **Akamai Bot Manager bulgusu**: PDP'ler korumanın arkasında — çerezsiz `curl` ile tutarlı şekilde JS interstitial döndü, stok/mağaza-bulucu JSON API'leri etkilenmedi. Düz `HttpClient` PDP'yi asla çekemiyor.
+- [x] **İkinci tasarım (regex) terk edildi**: statik HTML'e regex çalıştırmak jean/çizme/bazı top'larda işe yaradı ama çiçekli korse top'ta (REF 3327/360/676, kullanıcının bildirdiği ürün) tutarlı başarısız oldu — bundler bu sayfada string'leri paylaşılan değişkenlere çıkarmış (`stock:am` — gerçek değer statik metinde hiç yazılı değil), hangi ürünün etkileneceği öngörülemiyor.
+- [x] **Nihai tasarım — Vue component ağacından JS çalışma zamanı okuma**: `PlaywrightPdpFetcher.FetchProductSizesJsonAsync`, `document.getElementById('__nuxt').__vue__` kökünden `$children` ağacını tarayıp `colors[].sizes[]` barındıran component'i bulur, `page.EvaluateAsync` ile JS'in **çözümlediği gerçek değerleri** okur (minifier'ın literal mi değişkene mi çıkardığından bağımsız — Vue'nun reaktif state'i her zaman gerçek değeri tutar). DOM'daki `aria-disabled` niteliği de değerlendirildi (online sinyali için güvenilir) ama `partnumber` içermediği için mağaza kontrolü için tek başına yetersiz kaldı, Vue ağacı taraması tercih edildi.
+- [x] **Playwright — bundled Chromium değil, gerçek Chrome kanalı gerekti**: canlı testte Playwright'ın varsayılan Chromium'u UA/webdriver maskelemeye rağmen Akamai'den anında "Access Denied" aldı; `Channel = "chrome"` ile gerçek Chrome'u sürmek engeli aştı. Ayrıca `WaitUntilState.NetworkIdle` bu sayfada hiç tetiklenmediği için `DOMContentLoaded` + 8 saniyelik sabit bekleme kullanılıyor (3 saniye ağır sayfalarda yetersiz kaldı — jean sayfasında 7 bedenden 1'i gelmişti).
+- [x] **Redis cache-aside** — `BershkaStockApiClient`, PDP'den okunan beden listesini `bershka:pdp-sizes:{productUrl}` key'inde 15 dk önbelleğe alıyor; aynı ürüne yapılan art arda aramalar (online + mağaza, farklı il/ilçe) Playwright'ı tekrar tetiklemiyor. Kullanıcıyla konuşulup onaylanan yaklaşım — alternatif olan "Akamai çerezini yeniden kullanma" bilinçli olarak ertelendi (gerekirse sonra eklenecek).
+- [x] Online + mağaza stok kontrolü — ikisi de aynı PDP-okuma koduna dayanıyor; online: bedenin `Stock=="in_stock"` mi (`"coming_soon"`/`"out_of_stock"` — üçüncü değer canlı veride keşfedildi — ikisi de false); mağaza: gerçek `PartNumber` ile stok API'si sorgulanıp `MastersSizeId`'ye göre filtreleniyor.
+- [x] Alfabetik bedenler destekleniyor — sayısal/alfabetik ayrımı yapmaya gerek kalmadı, beden adı doğrudan string olarak eşleştiriliyor.
+- [x] RabbitMQ consumer — `CheckStockCommandConsumer`, `stock.check.bershka` kuyruğunu dinliyor (artık V2 tüketiyor)
+- [x] `StockResultEvent` publish — `ProductUrl` yok / PDP'de beden bulunamadı / API hatası durumlarında `StockStatus.Unknown` ile pipeline kesintisiz çalışıyor
+- [x] Polly retry policy + circuit breaker — stok API HttpClient'ı için 3 kez exponential backoff retry + 5 hatada 30 sn devre kesici
+- [x] User-Agent rotasyonu ve istekler arası gecikme stratejisi — `ScraperEtiquetteHandler`; prodüksiyona karşı doğrulandı (varsayılan `curl` UA'sı 403, gerçekçi UA 200)
+- [x] Unit testler (`tests/StockTracker.BershkaScraper.Tests` — 21 test, bkz. altta): `IBershkaPdpFetcher`/Redis mock'lanarak (JSON mock, gerçek Chrome gerekmiyor) — beden eşleştirme (case-insensitive, renk izolasyonu), `out_of_stock` durumu, cache hit/miss davranışı, mağaza stok filtreleme (`mastersSizeId`), hata durumları
+- [x] `BrandSpecificStoreId` seed verisinin gerçek Bershka mağaza kodlarıyla güncellenmesi (`store_db`) — Kadıköy/Şişli/Çankaya/Bornova için gerçek `physicalStoreId` değerleri (`16884`, `8359`, `6943`, `8426`), `UpdateBershkaStoresWithRealIds` migration'ıyla uygulandı
+- [x] Brand Detection'ın Bershka regex imzası doğrulandı ve düzeltildi — eski `^\d{7,9}$` gerçek formatla (11 haneli) uyuşmuyordu; `^\d{11}$` + Confidence High (`FixBershkaRegexToElevenDigits` migration'ı), bkz. `.claude/DATABASE.md`
+- [x] Playwright/Chrome kurulum dokümantasyonu — `bin/` gitignore'da olduğu için repo klonlandığında görünmeyen bir adım; `.claude/ENVIRONMENT_SETUP.md`'ye eklendi (tek seferlik, `dotnet clean`'den etkilenmiyor çünkü tarayıcı `~/Library/Caches/ms-playwright/` gibi proje-dışı bir önbellekte tutuluyor)
+- [x] **`PlaywrightPdpFetcher`'ın gerçek Chrome kurulu bir makinede bizzat çalıştırılarak canlı doğrulanması — 3 tur, 20+ ürün**:
+  - 1. tur (4 ürün, yalnızca online): 7/7 sonuç sitedeki gerçek durumla birebir örtüştü — kullanıcının bildirdiği "XS stokta, S/M/L değil" senaryosu dahil (bu ürün ilk regex tasarımında `Unknown` dönüyordu, Vue ağacı taramasıyla düzeldi).
+  - 2. tur (10 ürün, online + mağaza): kullanıcı sonuçları bizzat sitede/mağazada kontrol edip 3 üründe tutarsızlık bildirdi.
+- [x] **Kritik hata bulundu ve düzeltildi — `sizeId` ≠ `size`**: kullanıcının canlı çapraz doğrulaması, stok API yanıtındaki `sizeStocks[]` içinde `sizeId`'nin (mağaza içi anlamsız sıra indeksi, 1,2,3,4...) `size`'dan (gerçek `mastersSizeId` eşleniği, 101,102,103...) FARKLI olduğunu ortaya çıkardı. Kod yanlışlıkla `sizeId`'ye göre filtreliyordu — sayısal bedenlerde (jean) ikisi tesadüfen eşit olduğu için gizli kalmıştı, alfabetik/3-haneli beden sistemi kullanan ürünlerde gerçek stok varken sürekli `OutOfStock` dönüyordu. `SizeStockDto`'ya `Size` alanı eklenip filtreleme düzeltildi; regresyon testi eklendi (bkz. `.claude/ARCHITECTURE.md` → Bershka Scraper).
+- [x] **Boş mağaza yanıtı artık `Unknown`, `OutOfStock` değil**: bazı ürünler mağaza stok özelliğini hiç desteklemiyor (`{"stocks":[]}` dönüyor) — bunu yanlışlıkla "yok" saymak yerine artık "bilmiyorum" (`Unknown`) dönülüyor, kullanıcı deneyimini yanlış yönlendirmemek için (kullanıcı isteğiyle eklendi). İki yeni test (boş `stocks` dizisi, yanıtta hedef bedenin hiç bulunmaması) eklendi.
+- [x] **3. tur (10 yeni ürün, düzeltme sonrası)**: tüm sonuçlar yeniden doğrulandı; bir üründeki beklenmeyen `Unknown` ayrıca araştırılıp gerçek bir geçici Playwright navigasyon timeout'u (30 sn) olduğu — veri tutarsızlığı olmadığı — 3 kez art arda tutarlı veri çekilerek kanıtlandı.
+- [x] **Kritik hata bulundu ve düzeltildi — bir renk, birden fazla partnumber "ailesi"ne bölünmüş olabiliyor**: kullanıcının 3. tur sonuçlarını yeniden çapraz doğrulaması, 2 üründe (ürün 2, ürün 8) uygulamanın `OutOfStock`/`Unknown` dediği beden+mağaza kombinasyonunun sitede gerçekten stokta olduğunu ortaya çıkardı. Ürün 2 üzerinde Playwright ile sitenin kendi "Mağazada mevcudiyet" ağ trafiği yakalanarak kök neden kanıtlandı: aynı renk (ör. "Haki") içindeki bedenler farklı partnumber öneklerine ("aile") dağılmış olabiliyor (XS/S/L bir aileden, M/XL başka bir aileden — ikisi de gerçek, bağımsız SKU), ve sitenin kendisi hedef bedenin konum kodunu TÜM bilinen ailelerle birleştirip paralel sorguluyor. Eski kod tek bir aileyi sorguluyor, hatta beden eşleştirmesini `partnumber.StartsWith(productCode)` ile yaptığı için diğer ailedeki bedenleri hiç bulamıyordu. Düzeltme: beden eşleştirmesi artık PDP'nin `color.id` alanından türetilen `ColorId`'ye göre yapılıyor; `CheckStoreStockAsync` aynı `ColorId`'ye ait TÜM aile öneklerini hedef bedenin konum koduyla sorgulayıp adetleri topluyor (bkz. `.claude/ARCHITECTURE.md` → Bershka Scraper). Ürün 3 ve 9'daki kullanıcı gözlemi ("beden bilgisi olmadan aratılmış") araştırıldı — PDP verisi test edilen bedenlerin geçerli/aktif olduğunu doğruladı; kesin doğrulama düzeltme sonrası canlı yeniden test gerektiriyor (henüz yapılmadı).
+- [x] Unit testler `tests/StockTracker.BershkaScraper.Tests` — **24 test** (`sizeId`≠`size` regresyonu, boş-mağaza-yanıtı, `ColorId` bazlı eşleştirme ve çoklu-aile toplama testleri dahil).
+- [x] **5. tur (düzeltme sonrası 10 yeni ürün, gerçek üretim kodu — `ColorId`+çoklu-aile toplama)**: `BershkaStockApiClient`/`PlaywrightPdpFetcher` sınıfları doğrudan (üretimdeki kodun aynısı) gerçek Chrome ile 10 farklı üründe (top, jean, elbise kategorileri), her üründe 2 farklı beden × 2 farklı gerçek mağaza (Kadıköy/Şişli/Çankaya/Bornova rotasyonlu) olacak şekilde çalıştırıldı; gerçek `api.inditex.com` stok API'sine sorgu atıldı (yalnızca Redis cache mock'landı, aynı PDP'nin tekrar Playwright ile çekilmesini önlemek için). Kullanıcı sonuçları doğru olarak onayladı — 3. tur sonrası bulunan `sizeId`/`ColorId`/çoklu-aile hataları bu turda tekrar görülmedi.
+
+### Faz 2.5 — Scraper Health Monitoring ✅ Tamamlandı
+- [x] **Mimari karar — ayrı Postgres DB yerine paylaşılan Redis**: kullanıcı, planlanan `ScraperHealthLog` tablosunun kendi Postgres DB'sinde (`bershka_scraper_db`) tutulmasını sorguladı — Faz 6.1'de Zara/Pull&Bear geldiğinde her marka için ayrı DB açmanın hem tekrar eden operasyonel yük hem de merkezi görünürlük kaybı (N farklı DB'yi ayrı sorgulamak) yaratacağını, bunun domain verisi değil tüm scraper'larda ortak operasyonel telemetri olduğunu belirtti. Karar: yeni DB açılmadı, zaten paylaşılan tek Redis instance'ında scraper adına göre namespace'lenmiş bir yapı kullanıldı (bkz. `.claude/ARCHITECTURE.md` → Bershka Scraper → Scraper Health Monitoring).
+- [x] **`StockTracker.Shared.Scraping`** — yeni paylaşılan proje (Faz 2.6'da öngörülen "paylaşılan scraping altyapısı"nın ilk parçası), `IScraperHealthLogService`/`ScraperHealthLogService`. `scraper:health:{scraperName}:log` key'inde capped-list (`LPUSH`+`LTRIM`, son 500 deneme) — her deneme (başarılı/başarısız, HTTP durum kodu) loglanır.
+- [x] Son N denemedeki başarı oranını ve HTTP durum kodu dağılımını (200 vs 403/429) hesaplayan `GetStatsAsync` — `GET /health/scraper-stats?lastN=` ile dışa açıldı.
+- [x] Başarı oranı eşik altına düşünce (örneklem ≥10 ve başarı oranı <%70) `AlertTriggered=true` + `ILogger` Warning — proje genelinde ayrı bir bildirim kanalı (Slack/e-posta) olmadığı için yapılandırılmış log, bu fazın kapsamındaki gerçekçi "alert" biçimi.
+- [x] `PlaywrightPdpFetcher` (PDP çekimi, gerçek HTTP status `page.GotoAsync` yanıtından) ve `BershkaStockApiClient` (her aile-prefix stok API isteği) health-log'a bağlandı.
+- [x] Unit testler `tests/StockTracker.Shared.Scraping.Tests` — **12 test** (başarı oranı/durum kodu dağılımı, küçük örneklemde alarm tetiklenmemesi, Redis hatasında exception fırlatılmaması, scraper-bazlı bağımsız key'ler, `GetRecentFailuresAsync` dahil).
+- [x] Gerçek Chrome + gerçek Redis + gerçek `api.inditex.com`'a karşı doğrulandı: 4 gerçek ürün + 1 kasıtlı bozuk URL çalıştırıldı, Redis'teki ham kayıt (`redis-cli LRANGE`) ile `GetStatsAsync`'in hesapladığı istatistikler birebir tutarlı bulundu.
+- [x] **`Context` alanı eklendi** (kullanıcı isteğiyle — "hangi urlde/aşamada hata alındığını anlamlandıralım"): her log kaydı artık hangi ürün URL'i/mağaza/partnumber üzerinde olduğunu taşıyor; `GetRecentFailuresAsync` + `GET /health/scraper-failures` ile son N başarısız deneme, Redis'e elle bakmadan context'iyle birlikte sorgulanabiliyor.
+- [x] **3 farklı gerçek hata senaryosuyla doğrulandı** (bozuk ürün URL'i → PlaywrightPdp 404, çözülmeyen DNS → exception, geçersiz mağaza ID'si → gerçek Inditex API 404'ü): hepsi doğru `success:false` + gerçek HTTP durum kodu + context ile loglandı. Bu sırada DNS hatalarının çok satırlı Playwright call log'u içerdiği (kullanıcı `redis-cli` ham çıktısında fark etti) ve okunabilirliği bozduğu görüldü — `ErrorMessage` artık `LogAttemptAsync` içinde tek satıra normalize ediliyor (`ReplaceLineEndings`), regresyon testiyle sabitlendi.
+
+### Faz 2.6 — Scraping Ölçeklenebilirliği ve Bot-Tespiti Önlemleri ✅ Tamamlandı (proxy hariç)
+Bershka entegrasyonu sırasında doğrulandı: hedef siteler en azından User-Agent bazlı temel bot tespiti yapıyor (varsayılan `curl` UA'sı 403 aldı, gerçekçi tarayıcı UA'sı 200 aldı) ve tam ürün sayfalarında Akamai Bot Manager interstitial (JS proof-of-work) devrede — çerezsiz, art arda `curl` isteği bu sayfaya takıldı (scraper'ın kullandığı JSON API'ler etkilenmedi, ama bu koruma katmanının varlığını somut olarak kanıtladı). Faz 6.1'de marka sayısı artıp Faz 3.2'de periyodik poller devreye girince istek hacmi de artacağı için, bu tek bir scraper'ın değil paylaşılan bir altyapı sorunu — detaylı gerekçe için bkz. `.claude/ARCHITECTURE.md` → Ölçeklenme Riski. **Not**: proxy/IP rotasyonu bu fazın kapsamından çıkarıldı, ücretli bir sağlayıcı gerektirdiği için en sona (Faz 7) ertelendi — bkz. altta.
+- [x] **Host bazlı rate limiting (token bucket)** — `HostRateLimitingHandler` (`StockTracker.Shared.Scraping/Http`), her hedef host için dakika başına istek bütçesi (varsayılan 60/dk), süreç içi paylaşılan bucket'larla.
+- [x] **`429`/`Retry-After` özel işleme** — `ScraperResiliencePolicies.RetryWithRetryAfterAwareness`: eski `AddTransientHttpErrorPolicy` 429'u hiç kapsamıyordu (yalnızca 5xx/408), artık kapsıyor ve sunucunun `Retry-After` header'ına uyuyor.
+- [x] **Bot-tespiti kaynaklı `403` için ayrı, daha agresif devre kesici** — `ScraperResiliencePolicies.BotDetectionCircuitBreaker` (2 hata → 2 dk), normal 5xx devre kesicisinden (5 hata → 30 sn) bilinçli olarak farklı ve daha hızlı açılıyor.
+- [x] **Gerçekçi header profilleri** — `BrowserProfile`/`BrowserProfiles`: UA ile tutarlı `Accept-Language`/`sec-ch-ua*` seti birlikte rotasyonlanıyor; yalnızca Chromium profillerinde `sec-ch-ua*` dolu (Firefox/Safari gerçek tarayıcılar bu header'ları göndermez).
+- [x] **`ScraperEtiquetteHandler` + Polly wiring'in paylaşılan pakete taşınması** — `StockTracker.Shared.Scraping/Http`'e taşındı, `BershkaScraper.csproj`'dan Polly paket referansları kaldırıldı (artık `Shared.Scraping` üzerinden transitive geliyor). Zara/Pull&Bear eklendiğinde `.AddScraperResilience()` + iki handler'ı zincire eklemek yeterli.
+- [x] Gerçek `api.inditex.com`'a karşı doğrulandı: yeni handler zinciri gerçek bir online + mağaza stok sorgusunu sorunsuz tamamladı, Faz 2.5 health-log'una doğru işlendi.
+- [x] Unit testler `tests/StockTracker.Shared.Scraping.Tests` — **15 yeni test** (toplam 27): host bazlı bucket izolasyonu, bucket tükendiğinde gerçek bekleme (cancellation ile, gerçek 60 sn beklenmeden kanıtlandı), `ComputeRetryDelay`'in Retry-After önceliklendirmesi, 429 retry regresyon testi, 403 devre kesicisinin `BrokenCircuitException` fırlatması, tarayıcı profili tutarlılığı dahil.
+
+## Faz 3 — Takip + Bildirim
+
+### Faz 3.1 — Subscription Service: Watch Group Modeli ✅ Tamamlandı
+- [x] `WatchGroups` tablosu (`ProductCode`, `Size`, `StoreId`, `LastCheckedAt`, `LastKnownStatus`) — `LastKnownStatus`, `Shared.Contracts.Messages.V1.StockStatus` enum'unu (`InStock`/`OutOfStock`/`Unknown`) kullanıyor, Faz 3.2/2.4 ile aynı sözleşme
+- [x] `UserWatches` tablosu (`UserId`, `WatchGroupId`) — dedup için N:1 ayrımı; `(UserId, WatchGroupId)` unique index ile aynı kullanıcının aynı gruba iki kez eklenmesi DB seviyesinde engelleniyor
+- [x] `POST /watches` endpoint'i — mevcut WatchGroup varsa ekle, yoksa oluştur (`WatchService.CreateWatchAsync`, application-level find-or-create — bkz. `.claude/ARCHITECTURE.md` neden DB-unique-constraint değil)
+- [x] `GET /watches?userId=` endpoint'i — kullanıcının takip listesi, `WatchGroup`'un `LastKnownStatus`/`LastCheckedAt` bilgisiyle birlikte
+- [x] `DELETE /watches/{id}?userId=` endpoint'i — `id`=`UserWatch.Id`, `userId` sahiplik doğrulaması için zorunlu (eşleşmezse 404)
+- [x] Dedup mantığı testi: aynı ürün+beden+mağaza iki kullanıcı tarafından takip edildiğinde tek WatchGroup oluştuğunu doğrula — `tests/StockTracker.Subscription.Tests` (9 test)
+- [x] Gerçek Docker Postgres'e (`subscription_db`) karşı uçtan uca doğrulama: dedup, sahiplik kontrollü silme (404/204), silme sonrası liste boşalması test edildi; bu sırada `GET /watches`'ın gerçek Npgsql'e karşı 500 döndüğü bir `OrderByDescending`/projeksiyon çeviri hatası bulunup düzeltildi (unit testler InMemory provider kullandığı için bunu yakalayamamıştı) — sonrasında test verisi temizlendi
+
+### Faz 3.2 — Stock Poller (Scheduler) ✅ Tamamlandı
+- [x] Quartz.NET kurulumu (`Quartz.Extensions.Hosting` 3.19.1) — Hangfire yerine tercih edildi: ek bir dashboard/depolama DB'si gerektirmiyor, `AddQuartzHostedService` ile process-in-process çalışıyor, mevcut "her servis kendi DB'sini yönetir" prensibiyle en az sürtünmeli seçenek
+- [x] `LastKnownStatus = OutOfStock` olan WatchGroup'ları çeken job — kapsam bilinçli olarak genişletildi: `LastKnownStatus IS NULL OR LastKnownStatus <> InStock` (yani OutOfStock/Unknown/hiç kontrol edilmemiş), çünkü yeni oluşturulan bir WatchGroup'un durumu null'dur ve yalnızca OutOfStock filtrelenseydi hiçbir zaman ilk kontrolü yapılmazdı — bkz. `.claude/ARCHITECTURE.md`
+- [x] Her WatchGroup için `CheckStockCommand` (V2) publish — `StockPollerService.TryPublishCheckStockCommandAsync`, Product Service'ten marka/`ProductUrl` çözer, `StoreId` doluysa Store Reference'tan `BrandSpecificStoreId` çözer (bunun için Store Reference'a yeni `GET /stores/{id}` endpoint'i eklendi)
+- [x] Önceliklendirme: çok kullanıcılı gruplar daha sık, az kullanıcılı daha seyrek kontrol — `StockPollerService.ResolveCheckInterval`, `UserWatches` sayısına göre 3 kademe (yüksek/orta/düşük öncelik)
+- [x] Kontrol sıklığını config'den okunabilir yap — `appsettings.json` > `Poller` bölümü (`IntervalSeconds`, eşikler, her kademe için dakika cinsinden aralık), `IOptions<PollerSettings>` ile enjekte edilir
+- [x] **Kapanan döngü**: `StockResultEvent`'i (fanout) tüketen yeni bir consumer (`StockResultEventConsumer` → `WatchGroupStatusUpdater`) eklendi — poller'ın tetiklediği (veya Search Orchestrator'ın anlık aramasından gelen) sonuçlar `WatchGroup.LastKnownStatus`/`LastCheckedAt`'i günceller; bu olmadan poller'ın filtresi hiçbir zaman gerçek veriyle beslenmezdi
+- [x] Unit testler `tests/StockTracker.Subscription.Tests` — 16 yeni test (toplam 25): önceliklendirme kademeleri, `IsDue` sınır durumları, InStock grupların atlanması, hiç kontrol edilmemiş grupların yakalanması, marka çözülemediğinde `LastCheckedAt` güncellenmemesi, `StoreId`→`BrandSpecificStoreId` çözümü, `StockResultEvent`'in doğru `WatchGroup`'u (ProductCode+Size+StoreId) eşleştirmesi dahil
+- [x] Gerçek altyapıya karşı uçtan uca doğrulama: gerçek Docker Postgres/RabbitMQ + çalışan Product/BrandDetection/StoreReference servislerine karşı — bir `WatchGroup` oluşturulup poller'ın onu yakaladığı, Product Service'i sorgulayıp `stock.check.bershka` kuyruğuna doğru `CheckStockCommand` V2 payload'ını gönderdiği (RabbitMQ management API ile ham mesaj içeriği doğrulandı) ve `LastCheckedAt`'i güncellediği görüldü; ardından elle yayınlanan bir `StockResultEvent`'in consumer tarafından tüketilip `WatchGroup.LastKnownStatus`'u `InStock`'a çevirdiği ve bir sonraki poll döngüsünde bu grubun artık aday listesine girmediği (aday: 0) doğrulandı — sonrasında test verisi temizlendi
+
+### Faz 3.3 — Notification Service ✅ Tamamlandı (gerçek Firebase/SendGrid hesabı hariç)
+- [ ] Firebase projesi oluştur, FCM Server Key al — **kullanıcı kararıyla ertelendi**: gerçek hesap/anahtar bu oturumda yok, kod tarafı `FCM_SERVER_KEY` env var'ı okuyacak şekilde tam hazır (`FcmPushSender`), yapılandırılmadığı sürece gönderim denemeden loglanıp atlanıyor
+- [x] `NotificationLog` tablosu — `UserId`, `ProductCode`, `Size`, `StoreId`, `Channel` (Push/Email), `CommandId` (idempotency), `Success`, `SentAt`; `(CommandId, UserId, Channel)` üzerinde unique index
+- [x] `StockResultEvent` consumer — `StockResultEventConsumer` → `INotificationProcessingService`, kendi bağımsız `notification-stock-result-events` kuyruğuyla (Subscription'ın Faz 3.2'deki kuyruğundan ayrı, aynı fanout exchange'in başka bir kopyası)
+- [x] `LastKnownStatus` karşılaştırması — sadece yok→var değişiminde bildir — **Subscription Service'in `WatchGroup.LastKnownStatus`'una değil, Notification Service'in kendi bağımsız `WatchGroupNotificationState` tablosuna** dayanıyor (bkz. `.claude/ARCHITECTURE.md` — neden Subscription'a sorulmadığı: aynı fanout event'i paralel tüketen iki servisten biri "önceki durum" sorusunu diğerine sorarsa yarış durumu oluşur)
+- [x] FCM push gönderim entegrasyonu — `FcmPushSender`, gerçek FCM legacy HTTP API'ye (`fcm.googleapis.com/fcm/send`, `Authorization: key=...`) bağlı; **bu fazda hiç çağrılmıyor** çünkü cihaz push token'ı saklayan hiçbir mekanizma yok (mobil uygulama Faz 5.4'te geliyor) — `NoOpDeviceTokenProvider` her zaman `null` döner, push kanalı sessizce atlanır
+- [x] SendGrid/Postmark email gönderim entegrasyonu — `SendGridEmailSender`, gerçek SendGrid v3 Mail Send API'sine bağlı; email adresi Identity Service'ten (`GET /internal/users/{id}`, yeni eklendi) gerçek zamanlı çözülüyor — bu kanal **gerçekten çalışır durumda**, yalnızca `SENDGRID_API_KEY` yapılandırılmadığı için gerçek gönderim atlanıyor (`Success=false` olarak loglanıyor)
+- [x] Idempotency kontrolü (aynı event iki kez işlenirse çift bildirim gitmesin) — `NotificationLog(CommandId, UserId, Channel)` unique index + gönderim öncesi `AnyAsync` kontrolü
+- [x] Uçtan uca bildirim testi — gerçek Postgres/RabbitMQ + çalışan Identity/Subscription/Notification servislerine karşı: gerçek bir kullanıcı kaydedildi, `POST /watches` ile takip oluşturuldu, RabbitMQ üzerinden elle `OutOfStock` sonra `InStock` `StockResultEvent`'i yayınlandı — Notification Service doğru kullanıcıyı (`GET /internal/watchers`) ve email'ini (`GET /internal/users/{id}`) çözüp `NotificationLog` kaydını (`Channel=Email, Success=false — SendGrid anahtarı yok`) doğru `CommandId` ile oluşturdu; push kanalının token yokluğu nedeniyle doğru şekilde atlandığı, aynı event'in tekrar yayınlanmasının (state zaten `InStock` olduğu için) ikinci bir bildirime yol açmadığı doğrulandı — sonrasında test verisi temizlendi
+- [x] Unit testler `tests/StockTracker.Notification.Tests` — 7 test (ilk kontrolde bildirim gitmemesi, OutOfStock→OutOfStock/InStock→OutOfStock geçişlerinde bildirim gitmemesi, watcher yoksa gönderici çağrılmaması, restock'ta her watcher'a email gönderilip loglanması, push token yoksa gönderici hiç çağrılmadan atlanması, idempotency)
+
+## Faz 4 — Billing / Freemium (App Store / Play Store In-App Purchase)
+
+> **Mimari karar (kullanıcıyla netleştirildi)**: iyzico/Paddle gibi ayrı bir sanal pos/ödeme sağlayıcısı **kullanılmayacak**. Ödeme, mobil uygulamanın (Faz 5.4, React Native/Expo) App Store ve Play Store içindeki abonelik satın alma akışı üzerinden alınacak — Billing Service kart bilgisiyle hiç karşılaşmaz, yalnızca Apple/Google'ın sunucu API'lerine karşı satın almayı **doğrular** ve abonelik yaşam döngüsü event'lerini (yenileme/iptal/refund) onların webhook'larından (**App Store Server Notifications V2**, **Google Play Real-time Developer Notifications**) dinler. Gerekçe: PCI-DSS kapsamı tamamen store'lara devroluyor, ayrı bir ödeme sağlayıcı entegrasyonu/sözleşmesi gerekmiyor, App Store/Play Store politikaları zaten dijital/abonelik ürünlerde kendi IAP sistemlerinin kullanılmasını **zorunlu tutuyor** (üçüncü taraf ödeme sağlayıcıyla uygulamanın store'dan reddedilme riski de bu kararla ortadan kalkıyor).
+>
+> **Sıralama bağımlılığı**: gerçek bir satın alma akışının uçtan uca test edilmesi mobil client gerektirir (Faz 5.4, bu fazdan **sonra** geliyor) — Faz 4'te Billing Service'in doğrulama/webhook mantığı Apple/Google'ın sağladığı örnek sandbox payload'larıyla test edilecek, "gerçek cihazda gerçek satın alma" doğrulaması Faz 5.4 tamamlandıktan sonra yapılabilecek. Bu, projenin genelindeki "canlı/gerçek altyapıya karşı doğrula" prensibinden bilinçli bir sapma — burada engel bizim kodumuz değil, henüz var olmayan bir mobil client.
+
+### Faz 4.1 — Plan Modeli 🔜
+- [ ] `Plans` tablosu (`MaxTrackedProducts`, `CheckFrequencyMinutes`, `AppStoreProductId`, `PlayStoreProductId`) — **`Price` DB'de tutulmaz**: gerçek fiyat App Store Connect/Play Console'da tanımlanır (bölgeye göre değişen fiyatlandırma, store'ların kendi vergi/kur hesaplaması var — DB'de ayrıca tutmak "kaynak neresi" çelişkisi yaratır ve senkronizasyon yükü ekler)
+- [ ] Free ve Premium plan seed data — `AppStoreProductId`/`PlayStoreProductId` alanları, ilgili store konsollarında gerçek ürün oluşturulana kadar `null`
+- [ ] Yeni kullanıcıya otomatik Free plan atanması
+
+### Faz 4.2 — Store IAP Doğrulama + Webhook Entegrasyonu 🔜
+- [ ] Apple Developer Program hesabı + App Store Connect'te abonelik ürünü tanımlama; App Store Server API anahtarı (`.p8`, Key ID, Issuer ID)
+- [ ] Google Play Console hesabı + Play Console'da abonelik ürünü tanımlama; Play Developer API için service account JSON
+- [ ] `POST /billing/verify-purchase` endpoint'i — mobil client, kullanıcı satın almayı App Store/Play Store'da tamamladıktan sonra `{platform, receiptOrToken}` gönderir; Billing Service ilgili store'un **server-to-server** API'sine karşı doğrular (Apple: App Store Server API `GET /inApps/v1/subscriptions/{transactionId}`; Google: Play Developer API `purchases.subscriptions.get`) — doğrulanırsa `Subscriptions` kaydı oluşturulur/güncellenir
+- [ ] `POST /billing/webhooks/apple` — App Store Server Notifications V2, JWS-signed payload, Apple'ın public key'iyle imza doğrulaması
+- [ ] `POST /billing/webhooks/google` — Real-time Developer Notifications (Cloud Pub/Sub push subscription), OIDC token doğrulaması
+- [ ] Abonelik yenileme/iptal/ödeme başarısız/refund event'leri — her iki webhook'tan da gelen event tipleri `PaymentEvents`e normalize edilerek yazılır
+- [ ] Webhook idempotency: `PaymentEvents` tablosunda `(Provider, EventId)` unique constraint ile çift işlem önlenir
+- [ ] Sandbox uçtan uca test: Apple "Sandbox Tester" hesabı + Google Play "License Testing" ile örnek doğrulama/webhook payload'ları üzerinden (gerçek cihazda satın alma testi Faz 5.4 sonrasına kalıyor — yukarıdaki sıralama bağımlılığı notuna bakın)
+
+### Faz 4.3 — Limit Kontrol Middleware'i 🔜
+- [ ] `GET /billing/limits/{userId}` endpoint'i
+- [ ] Subscription Service'te yeni UserWatch öncesi limit kontrolü
+- [ ] Limit aşımında anlamlı hata mesajı
+- [ ] Plan downgrade senaryosu testi — store tarafında otomatik yenileme iptal edildiğinde/süre dolduğunda kullanıcının bir sonraki dönemde Free plana düşmesi (webhook'tan gelen iptal/expire event'iyle tetiklenir)
+
+## Faz 5 — Frontend
+
+### Faz 5.1 — API Sözleşmesinin Netleştirilmesi 🔜
+- [ ] Tüm endpoint'ler için OpenAPI/Swagger dokümantasyonu
+- [ ] Ortak TypeScript tip paketi (`shared-types`)
+
+### Faz 5.2 — Figma Tasarımı 🔜
+- [ ] Ana ekranlar: giriş, ürün arama, beden/il-ilçe seçimi, sonuç, takip listesi, profil
+- [ ] Web ve mobil için ayrı frame'ler
+- [ ] Auto-layout, isimlendirilmiş component'ler, değişken bazlı renkler
+
+### Faz 5.3 — React Web 🔜
+- [ ] Figma MCP → Claude Code ile component üretimi
+- [ ] Giriş/kayıt, arama, seçim, sonuç, takip listesi ekranları (önce sahte veri)
+- [ ] Gerçek API'ye bağlama
+
+### Faz 5.4 — React Native (Expo) 🔜
+- [ ] Expo projesi kurulumu
+- [ ] Figma MCP → Claude Code ile mobil component'ler
+- [ ] `expo-camera` / `expo-barcode-scanner` entegrasyonu
+- [ ] FCM push notification token kaydı
+- [ ] Gerçek cihazda barkod tarama + push notification testi
+
+## Faz 6 — Ek Markalar + Stabilizasyon
+
+### Faz 6.1 — Yeni Marka Onboarding Şablonu 🔜
+- [ ] Marka ekleme checklist dokümanı (regex keşfi → site-search → store mapping → scraper → health monitoring)
+- [ ] Zara scraper ekleme
+- [ ] Pull&Bear scraper ekleme
+
+### Faz 6.2 — Uçtan Uca Yük/Stabilite Testi 🔜
+- [ ] 50-100 sahte kullanıcı ile watch-group dedup testi
+- [ ] Circuit breaker davranış testi
+- [ ] Bildirim duplicate kontrolü
+- [ ] RabbitMQ backlog senaryosu
+- [ ] Go-live checklist
+
+## Faz 7 — Proxy / IP Rotasyonu (ertelendi — son faz)
+
+Faz 2.6'dan bilinçli olarak çıkarıldı: gerçek bir IP rotasyonu, farklı çıkış IP'leri sağlayan bir altyapı gerektirir — bu ya ücretli bir proxy sağlayıcısı (Bright Data, Oxylabs, Smartproxy vb.) ya da kendi çok-bölgeli sunucu altyapımız (o da maliyetli) demek. Ücretsiz/public proxy listeleri güvenlik riski taşıyor (trafiği görebilen güvenilmez üçüncü taraflar) ve genelde zaten bloklanmış durumda; Tor ise Akamai gibi sistemler tarafından datacenter IP'lerinden bile daha agresif tespit ediliyor. Kullanıcı kararı: şimdilik hiçbir ücretli servise girilmeyecek, bu faz bir sağlayıcı kararı alınana kadar pasif bekletiliyor.
+
+- [ ] Sağlayıcı kararı verildiğinde: `IProxyProvider` soyutlaması + `HttpClientHandler.Proxy` wiring
+- [ ] Proxy sağlığı/rotasyon stratejisi (round-robin, sticky-session vb.) — sağlayıcıya göre değişir
+- [ ] Faz 2.5'teki `IScraperHealthLogService`'e proxy-bazlı başarı oranı ekleme (hangi proxy/IP havuzu daha çok engelleniyor)
+
+---
+
+## Mimari Kararlar (Geliştirme Sürecinde Netleşenler)
+
+- **Servisler arası iletişim Gateway'den geçmez** — internal çağrılar direkt HTTP ile yapılır (örn. BrandDetection → Product Service). Gateway yalnızca dış client trafiğini yönetir.
+- **YARP `PathPattern` + `PathRemovePrefix` aynı blokta kullanılamaz** — her biri ayrı transform bloğuna alındı.

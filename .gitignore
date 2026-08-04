@@ -6,7 +6,7 @@
 # dotenv files
 .env
 .hande
-.claude
+# .claude
 
 # User-specific files
 *.rsuser

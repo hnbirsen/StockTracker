@@ -1,0 +1,9 @@
+{
+    "name": "claude-in-chrome",
+    "description": "Allows Claude to interact with Google Chrome for web browsing and inspection",
+    "enabled": true,
+    "permissions": {
+        "allowBrowsing": true,
+        "allowLocalhost": true
+    }
+}

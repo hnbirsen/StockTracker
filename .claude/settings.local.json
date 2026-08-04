@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet add *)",
+      "Bash(docker compose *)",
+      "Bash(dotnet run *)",
+      "Bash(docker exec *)",
+      "Bash(dotnet build *)",
+      "Bash(mkdir -p /Users/hnbirsen/Desktop/StockTracker/tests)",
+      "Bash(dotnet new *)",
+      "Bash(dotnet test *)",
+      "Bash(echo \"product pid $!\")",
+      "Bash(echo \"brand pid $!\")",
+      "Bash(echo \"search pid $!\")",
+      "Bash(curl -s http://localhost:5002/health)",
+      "Bash(curl -s http://localhost:5003/health)",
+      "Bash(uuidgen)",
+      "Bash(curl -s -X POST http://localhost:5005/search -H 'Content-Type: application/json' -d '{\"userId\":\"__CMDSUB_OUTPUT__\",\"productCode\":\"1234567\",\"size\":\"38\",\"locations\":[{\"city\":\"Istanbul\",\"district\":\"Kadikoy\"}]}' -w '\\\\nHTTP_STATUS:%{http_code}\\\\n')",
+      "Bash(curl -s -X POST http://localhost:5005/search -H 'Content-Type: application/json' -d '{\"userId\":\"__CMDSUB_OUTPUT__\",\"productCode\":\"12345/678/123\",\"size\":\"38\",\"locations\":[{\"city\":\"Istanbul\",\"district\":\"Kadikoy\"}]}' -w '\\\\nHTTP_STATUS:%{http_code}\\\\n')",
+      "Bash(kill %1 %2 %3)",
+      "Bash(pkill -f \"StockTracker.Product.dll\")",
+      "Bash(pkill -f \"StockTracker.BrandDetection.dll\")",
+      "Bash(pkill -f \"StockTracker.SearchOrchestrator.dll\")",
+      "Bash(kill 40636 40632 40633 40622 40621 40620)",
+      "Bash(tee /tmp/build_full.log)",
+      "Bash(tee /tmp/test_full.log)",
+      "Bash(dotnet ef *)",
+      "Bash(echo \"pid $!\")",
+      "Bash(curl -s http://localhost:5004/health)",
+      "Bash(curl -s \"http://localhost:5004/stores\")",
+      "Bash(curl -s \"http://localhost:5004/stores?city=Istanbul&district=Kadikoy\")",
+      "Bash(curl -s \"http://localhost:5004/stores?brandId=a1b2c3d4-e5f6-7890-abcd-ef1234567890\")",
+      "Bash(curl -s \"http://localhost:5004/stores?city=Antalya\")",
+      "Bash(pkill -f \"StockTracker.StoreReference\")",
+      "Bash(curl -s http://localhost:5005/health)",
+      "Bash(curl -s -X POST http://localhost:5005/search -H 'Content-Type: application/json' -d '{\"userId\":\"__CMDSUB_OUTPUT__\",\"productCode\":\"12345/678/777\",\"size\":\"40\",\"locations\":[{\"city\":\"Istanbul\",\"district\":\"Kadikoy\"}]}' -w '\\\\nHTTP_STATUS:%{http_code}\\\\n')",
+      "Bash(curl *)",
+      "Bash(pkill -f \"StockTracker.Product\")",
+      "Bash(pkill -f \"StockTracker.BrandDetection\")",
+      "Bash(pkill -f \"StockTracker.SearchOrchestrator\")"
+    ]
+  }
+}

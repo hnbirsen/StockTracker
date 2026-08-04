@@ -1,0 +1,71 @@
+# ==========================================
+# .NET Core & C# Derleme Çıktıları (En Çok Token Tüketen Kısım)
+# ==========================================
+**/bin/
+**/obj/
+**/out/
+**/[Dd]ebug/
+**/[Rr]elease/
+*.dll
+*.exe
+*.pdb
+*.cache
+*.nupkg
+*.user
+*.suo
+
+# ==========================================
+# IDE ve Geliştirici Araçları
+# ==========================================
+.vs/
+.idea/
+.vscode/
+*.sln.docstates
+*.userossc
+
+# ==========================================
+# Test Sonuçları ve Benchmark Raporları
+# ==========================================
+**/TestResults/
+**/Coverage/
+**/coverage/
+*.trx
+*.coverage
+*.coveragexml
+**/BenchmarkDotNet.Artifacts/
+
+# ==========================================
+# Yerel Veritabanı ve Gizli Dosyalar (Secrets)
+# ==========================================
+*.db
+*.sqlite
+*.mdf
+*.ldf
+appsettings*.Local.json
+appsettings.Development.json
+**/secrets.json
+
+# ==========================================
+# Loglar ve Sistem Dökümleri
+# ==========================================
+**/logs/
+**/Logs/
+*.log
+*.dump
+*.dmp
+
+# ==========================================
+# Konteyner, DevOps ve Ön Yüz (Frontend)
+# ==========================================
+.docker/
+**/node_modules/
+**/dist/
+**/wwwroot/lib/
+*.tar
+*.gz
+
+# ==========================================
+# Otomatik Üretilen Geçici Kodlar
+# ==========================================
+*.g.cs
+*.assemblyattributes.cs
