@@ -41,6 +41,7 @@ public class ProductServiceClient : IProductServiceClient
             confidence = confidenceInt
         };
 
-        await _httpClient.PostAsJsonAsync("/mappings", payload);
+        var response = await _httpClient.PostAsJsonAsync("/mappings", payload);
+        response.EnsureSuccessStatusCode();
     }
 }
