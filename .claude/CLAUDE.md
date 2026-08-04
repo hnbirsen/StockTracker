@@ -82,6 +82,7 @@ Full detail lives in `.claude/` — read the relevant file before touching that 
 - `.claude/ENVIRONMENT_SETUP.md` — env var reference, Mac/Windows parity notes (LF line endings for `.sh` scripts, exec-bit loss on Mac→Docker)
 - `.claude/SECURITY.md` — auth/token lifecycle, scraping legal risk, payment/webhook security notes
 - `.claude/ROADMAP.md` — phase-by-phase status; check before starting new work to see what's actually done vs. planned
+- `.claude/PENDING_INPUTS.md` — checklist of real-world credentials/accounts/decisions the user still needs to provide (Apple/Google/SendGrid/Firebase accounts, legal review, etc.) — every service was built against real APIs with graceful placeholder fallbacks; this tracks what's still a placeholder. Add a new item here whenever a phase needs a real external account/credential that isn't available yet.
 - `.claude/CONTRIBUTING.md` — commit format (Conventional Commits), new-service checklist, new-scraper checklist
 
 Key standards from `.claude/CONTRIBUTING.md`:
