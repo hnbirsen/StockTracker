@@ -10,6 +10,7 @@ public interface IWatchService
     Task<WatchDto> CreateWatchAsync(CreateWatchRequest request);
     Task<List<WatchDto>> GetWatchesAsync(Guid userId);
     Task<bool> DeleteWatchAsync(Guid userWatchId, Guid userId);
+    Task<List<Guid>> GetWatcherUserIdsAsync(string productCode, string size, Guid? storeId);
 }
 
 public class WatchService : IWatchService
@@ -81,6 +82,21 @@ public class WatchService : IWatchService
         _db.UserWatches.Remove(userWatch);
         await _db.SaveChangesAsync();
         return true;
+    }
+
+    // Faz 3.3 — Notification Service'in "bu ürün/beden/mağazayı kimler takip ediyor" sorusuna cevap vermesi için.
+    public async Task<List<Guid>> GetWatcherUserIdsAsync(string productCode, string size, Guid? storeId)
+    {
+        var watchGroup = await _db.WatchGroups.FirstOrDefaultAsync(w =>
+            w.ProductCode == productCode && w.Size == size && w.StoreId == storeId);
+
+        if (watchGroup is null)
+            return new List<Guid>();
+
+        return await _db.UserWatches
+            .Where(uw => uw.WatchGroupId == watchGroup.Id)
+            .Select(uw => uw.UserId)
+            .ToListAsync();
     }
 
     private static WatchDto ToDto(UserWatch userWatch, WatchGroup watchGroup) => new(

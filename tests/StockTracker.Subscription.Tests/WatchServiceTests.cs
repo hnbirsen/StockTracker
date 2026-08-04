@@ -156,4 +156,50 @@ public class WatchServiceTests
 
         deleted.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task GetWatcherUserIdsAsync_ReturnsAllUsersWatchingThatWatchGroup()
+    {
+        await using var db = CreateDbContext();
+        var sut = new WatchService(db);
+        var userA = Guid.NewGuid();
+        var userB = Guid.NewGuid();
+
+        await sut.CreateWatchAsync(new CreateWatchRequest(userA, "1234567890123", "M", null));
+        await sut.CreateWatchAsync(new CreateWatchRequest(userB, "1234567890123", "M", null));
+
+        var watchers = await sut.GetWatcherUserIdsAsync("1234567890123", "M", null);
+
+        watchers.Should().BeEquivalentTo(new[] { userA, userB });
+    }
+
+    [Fact]
+    public async Task GetWatcherUserIdsAsync_WhenNoMatchingWatchGroup_ReturnsEmptyList()
+    {
+        await using var db = CreateDbContext();
+        var sut = new WatchService(db);
+
+        var watchers = await sut.GetWatcherUserIdsAsync("does-not-exist", "M", null);
+
+        watchers.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetWatcherUserIdsAsync_DistinguishesByStoreId()
+    {
+        await using var db = CreateDbContext();
+        var sut = new WatchService(db);
+        var storeId = Guid.NewGuid();
+        var onlineUser = Guid.NewGuid();
+        var storeUser = Guid.NewGuid();
+
+        await sut.CreateWatchAsync(new CreateWatchRequest(onlineUser, "1234567890123", "M", null));
+        await sut.CreateWatchAsync(new CreateWatchRequest(storeUser, "1234567890123", "M", storeId));
+
+        var onlineWatchers = await sut.GetWatcherUserIdsAsync("1234567890123", "M", null);
+        var storeWatchers = await sut.GetWatcherUserIdsAsync("1234567890123", "M", storeId);
+
+        onlineWatchers.Should().BeEquivalentTo(new[] { onlineUser });
+        storeWatchers.Should().BeEquivalentTo(new[] { storeUser });
+    }
 }

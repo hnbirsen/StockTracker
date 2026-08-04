@@ -52,6 +52,14 @@ public static class AuthEndpoints
             return Results.Ok();
         });
 
+        // GET /internal/users/{id} — servisler arası direkt HTTP, gateway'den geçmez (bkz. .claude/ARCHITECTURE.md).
+        // Notification Service (Faz 3.3), bildirim göndereceği kullanıcının email'ini buradan çözer.
+        app.MapGet("/internal/users/{id:guid}", async (Guid id, IAuthService authService) =>
+        {
+            var user = await authService.GetUserByIdAsync(id);
+            return user is not null ? Results.Ok(user) : Results.NotFound();
+        });
+
         // GET /health
         app.MapGet("/health", () => Results.Ok());
     }

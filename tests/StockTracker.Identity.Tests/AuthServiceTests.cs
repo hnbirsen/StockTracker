@@ -208,4 +208,30 @@ public class AuthServiceTests
 
         await act.Should().NotThrowAsync();
     }
+
+    [Fact]
+    public async Task GetUserByIdAsync_WhenUserExists_ReturnsUserDto()
+    {
+        await using var db = CreateDbContext();
+        var user = new User { Email = "found@example.com", PasswordHash = "hash" };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var sut = CreateSut(db);
+        var result = await sut.GetUserByIdAsync(user.Id);
+
+        result.Should().NotBeNull();
+        result!.Email.Should().Be("found@example.com");
+    }
+
+    [Fact]
+    public async Task GetUserByIdAsync_WhenUserDoesNotExist_ReturnsNull()
+    {
+        await using var db = CreateDbContext();
+        var sut = CreateSut(db);
+
+        var result = await sut.GetUserByIdAsync(Guid.NewGuid());
+
+        result.Should().BeNull();
+    }
 }

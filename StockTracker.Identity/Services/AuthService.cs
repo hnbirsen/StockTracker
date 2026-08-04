@@ -11,6 +11,7 @@ public interface IAuthService
     Task<AuthResponse?> LoginAsync(LoginRequest request);
     Task<AuthResponse?> RefreshTokenAsync(string refreshToken);
     Task RevokeRefreshTokenAsync(string refreshToken);
+    Task<UserDto?> GetUserByIdAsync(Guid userId);
 }
 
 public class AuthService : IAuthService
@@ -90,6 +91,12 @@ public class AuthService : IAuthService
 
         storedToken.IsRevoked = true;
         await _dbContext.SaveChangesAsync();
+    }
+
+    public async Task<UserDto?> GetUserByIdAsync(Guid userId)
+    {
+        var user = await _dbContext.Users.FindAsync(userId);
+        return user is null ? null : new UserDto(user.Id, user.Email, user.FirstName, user.LastName, user.IsEmailVerified);
     }
 
     private async Task<AuthResponse> GenerateAuthResponseAsync(User user)

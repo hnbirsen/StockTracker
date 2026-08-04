@@ -68,7 +68,7 @@ flowchart LR
 | StockTracker.SearchOrchestrator | 5005 | Routes user queries to scraper queues, throttling | ✅ Done |
 | StockTracker.Subscription | 5006 | Watch groups, tracking list, deduplication, Quartz-based stock poller | ✅ Done — watch group model (Faz 3.1) + stock poller (Faz 3.2); notifications still planned |
 | StockTracker.Billing | 5007 | Freemium plans, iyzico/Paddle integration | 🔜 Planned |
-| StockTracker.Notification | 5008 | FCM push + email notifications | 🔜 Planned |
+| StockTracker.Notification | 5008 | FCM push + email notifications | ✅ Done — restock detection, idempotency, real SendGrid integration wired (real Firebase/SendGrid credentials pending) |
 | StockTracker.BershkaScraper | 5009 | Consumes `CheckStockCommand`, publishes `StockResultEvent` | ✅ Done — real Bershka/Inditex API wired up |
 | StockTracker.Shared.Contracts | — | Shared DTOs, RabbitMQ message contracts (`CheckStockCommand`, `StockResultEvent`) and MassTransit setup | ✅ In use |
 | StockTracker.Shared.Scraping | — | Cross-scraper shared library — Redis-backed `IScraperHealthLogService`, plus `Http/` (host-based token-bucket rate limiting, realistic rotating browser header profiles, Retry-After-aware retry + separate bot-detection circuit breaker) | ✅ In use |
@@ -92,7 +92,7 @@ flowchart LR
 | Scraper scalability & bot-detection hardening (host rate limiting, 429/`Retry-After`, bot-detection circuit breaker, realistic header profiles) | ✅ Done — proxy/IP rotation deferred (needs a paid provider, see ROADMAP Faz 7) |
 | Subscription Service (watch groups, dedup, `POST`/`GET`/`DELETE /watches`) | ✅ Done |
 | Stock Poller (Quartz.NET, watcher-count priority tiers, closes the loop via a `StockResultEvent` consumer) | ✅ Done |
-| Notification Service (FCM + email) | 🔜 Planned |
+| Notification Service (restock detection, idempotent `StockResultEvent` consumer, real SendGrid email; FCM wired but unused pending device-token storage from Faz 5.4) | ✅ Done |
 | Billing Service (freemium + payment) | 🔜 Planned |
 | React Web frontend | 🔜 Planned |
 | React Native + Expo mobile app | 🔜 Planned |

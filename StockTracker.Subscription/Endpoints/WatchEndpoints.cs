@@ -43,6 +43,14 @@ public static class WatchEndpoints
             return deleted ? Results.NoContent() : Results.NotFound();
         });
 
+        // GET /internal/watchers?productCode=&size=&storeId= — servisler arası direkt HTTP, gateway'den geçmez.
+        // Notification Service (Faz 3.3), bir restock event'inde kimlere bildirim gideceğini buradan çözer.
+        app.MapGet("/internal/watchers", async (string productCode, string size, Guid? storeId, IWatchService service) =>
+        {
+            var userIds = await service.GetWatcherUserIdsAsync(productCode, size, storeId);
+            return Results.Ok(userIds);
+        });
+
         app.MapGet("/health", () => Results.Ok("OK"));
     }
 }
