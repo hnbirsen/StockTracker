@@ -1,5 +1,6 @@
-public record RegisterRequest 
-(
+namespace StockTracker.Identity.DTOs;
+
+public record RegisterRequest(
     string Email,
     string Password,
     string? FirstName,

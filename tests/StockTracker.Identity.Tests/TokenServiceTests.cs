@@ -1,6 +1,8 @@
 using System.IdentityModel.Tokens.Jwt;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
+using StockTracker.Identity.Entities;
+using StockTracker.Identity.Services;
 
 namespace StockTracker.Identity.Tests;
 

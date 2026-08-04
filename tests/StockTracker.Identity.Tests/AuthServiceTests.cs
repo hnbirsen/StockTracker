@@ -2,6 +2,10 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Moq;
+using StockTracker.Identity.Data;
+using StockTracker.Identity.DTOs;
+using StockTracker.Identity.Entities;
+using StockTracker.Identity.Services;
 
 namespace StockTracker.Identity.Tests;
 

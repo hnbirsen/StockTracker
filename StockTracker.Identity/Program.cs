@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using StockTracker.Identity.Data;
+using StockTracker.Identity.Endpoints;
+using StockTracker.Identity.Services;
 using StockTracker.Shared.Contracts.Configuration;
 
 EnvFileLoader.LoadFromNearestEnvFile();
@@ -28,7 +31,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-    dbContext.Database.Migrate();
+    await dbContext.Database.MigrateAsync();
 }
 
 app.MapAuthEndpoints();

@@ -1,4 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using StockTracker.Identity.Data;
+using StockTracker.Identity.DTOs;
+using StockTracker.Identity.Entities;
+
+namespace StockTracker.Identity.Services;
 
 public interface IAuthService
 {

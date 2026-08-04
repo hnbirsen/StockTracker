@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using StockTracker.Identity.Entities;
+
+namespace StockTracker.Identity.Data;
 
 public class IdentityDbContext : DbContext
 {
