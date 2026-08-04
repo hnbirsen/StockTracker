@@ -19,8 +19,15 @@ public static class WatchEndpoints
             if (string.IsNullOrWhiteSpace(request.Size))
                 return Results.BadRequest("Beden boş olamaz.");
 
-            var watch = await service.CreateWatchAsync(request);
-            return Results.Created($"/watches/{watch.UserWatchId}", watch);
+            var result = await service.CreateWatchAsync(request);
+            if (!result.Success)
+            {
+                return Results.Json(
+                    new { error = result.ErrorCode, message = result.ErrorMessage },
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            return Results.Created($"/watches/{result.Watch!.UserWatchId}", result.Watch);
         });
 
         // GET /watches?userId= — kullanıcının takip listesi

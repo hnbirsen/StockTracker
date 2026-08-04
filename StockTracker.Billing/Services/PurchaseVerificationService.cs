@@ -12,7 +12,7 @@ public interface IPurchaseVerificationService
     Task<VerifyPurchaseResult> VerifyAndRecordAsync(VerifyPurchaseRequest request, CancellationToken cancellationToken);
 }
 
-// POST /billing/verify-purchase'ın çekirdeği — mobil client'ın App Store/Play Store'da tamamladığı bir
+// POST /verify-purchase'ın çekirdeği — mobil client'ın App Store/Play Store'da tamamladığı bir
 // satın almayı ilgili store'un server-to-server API'sine karşı doğrular, doğrulanırsa kullanıcıyı hemen
 // Premium'a yükseltir (webhook'u beklemeden — kullanıcı deneyimi için satın alma anında erişim açılmalı;
 // webhook'lar (Faz 4.2, PaymentEventProcessor) sonraki yaşam döngüsü değişikliklerini işler).

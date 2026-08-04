@@ -143,4 +143,35 @@ public class UserPlanServiceTests
         await act.Should().NotThrowAsync();
         (await db.UserPlans.CountAsync(up => up.UserId == userId)).Should().Be(1);
     }
+
+    [Fact]
+    public async Task GetUserLimitsAsync_WhenUserHasPlan_ReturnsThatPlansLimits()
+    {
+        await using var db = CreateDbContext();
+        var premiumPlan = new Plan { Id = BillingDbContext.PremiumPlanId, Name = "Premium", MaxTrackedProducts = 50, CheckFrequencyMinutes = 5 };
+        db.Plans.Add(premiumPlan);
+        var userId = Guid.NewGuid();
+        db.UserPlans.Add(new UserPlan { UserId = userId, PlanId = premiumPlan.Id });
+        await db.SaveChangesAsync();
+
+        var sut = new UserPlanService(db);
+        var result = await sut.GetUserLimitsAsync(userId);
+
+        result.PlanName.Should().Be("Premium");
+        result.MaxTrackedProducts.Should().Be(50);
+    }
+
+    [Fact]
+    public async Task GetUserLimitsAsync_WhenUserHasNoPlanYet_FallsBackToFreePlanLimits()
+    {
+        await using var db = CreateDbContext();
+        db.Plans.Add(CreateFreePlan());
+        await db.SaveChangesAsync();
+
+        var sut = new UserPlanService(db);
+        var result = await sut.GetUserLimitsAsync(Guid.NewGuid());
+
+        result.PlanName.Should().Be("Free");
+        result.MaxTrackedProducts.Should().Be(3);
+    }
 }

@@ -13,7 +13,7 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 | `brand_db` | Brand Detection Service | ✅ Migration uygulandı |
 | `store_db` | Store Reference Service | ✅ Migration uygulandı |
 | `subscription_db` | Subscription Service | ✅ Migration uygulandı |
-| `billing_db` | Billing Service | ✅ Migration uygulandı (Faz 4.1 + 4.2) |
+| `billing_db` | Billing Service | ✅ Migration uygulandı (Faz 4.1 + 4.2 + 4.3) |
 | `notification_db` | Notification Service | ✅ Migration uygulandı |
 
 ## Init Script Kuralları
@@ -117,7 +117,7 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 
 **Dedup mantığı**: aynı `ProductCode`+`Size`+`StoreId` kombinasyonunu takip eden tüm kullanıcılar tek bir `WatchGroup`'a bağlanır — `UserWatches` N:1 ayrımı bunun için var. `WatchGroups` üzerinde `(ProductCode, Size, StoreId)` index'i var ama **unique değil**: `StoreId` nullable olduğundan Postgres unique constraint'te NULL'ları birbirinden farklı sayar, bu yüzden dedup DB constraint'i yerine `WatchService.CreateWatchAsync` içinde application-level "find or create" ile yapılıyor. `UserWatches` üzerinde `(UserId, WatchGroupId)` **unique** index var — aynı kullanıcının aynı gruba iki kez eklenmesini DB seviyesinde engelliyor.
 
-`POST /watches` `{userId, productCode, size, storeId?}` alır, mevcut/yeni `WatchGroup`'a bağlı `UserWatch` döner (201). `GET /watches?userId=` kullanıcının takip listesini `WatchGroup` verisiyle (LastKnownStatus/LastCheckedAt) birlikte döner. `DELETE /watches/{id}?userId=` yalnızca `UserWatch`'ı siler (WatchGroup, başka kullanıcılar takip ediyor olabileceği için silinmez); `userId` sahiplik kontrolü için zorunlu — eşleşmezse `404` (kayıt var/yok bilgisi sızdırılmaz).
+`POST /watches` `{userId, productCode, size, storeId?}` alır, mevcut/yeni `WatchGroup`'a bağlı `UserWatch` döner (201). Kullanıcı zaten aynı `WatchGroup`'u takip etmiyorsa (Faz 4.3), yeni bir `UserWatch` açılmadan önce Billing Service'in `GET /limits/{userId}`'i sorulur — limit aşılmışsa `403` + `WATCH_LIMIT_EXCEEDED` döner (bkz. altta ve `.claude/ARCHITECTURE.md` → Billing → Limit Kontrol Middleware'i). `GET /watches?userId=` kullanıcının takip listesini `WatchGroup` verisiyle (LastKnownStatus/LastCheckedAt) birlikte döner. `DELETE /watches/{id}?userId=` yalnızca `UserWatch`'ı siler (WatchGroup, başka kullanıcılar takip ediyor olabileceği için silinmez); `userId` sahiplik kontrolü için zorunlu — eşleşmezse `404` (kayıt var/yok bilgisi sızdırılmaz).
 
 > Not: `GetWatchesAsync` sorgusunda `OrderByDescending` DTO projeksiyonundan **önce** uygulanıyor — projeksiyon sonrası sıralama InMemory test provider'ında client-eval ile sorunsuz çalışıyor ama gerçek Npgsql sağlayıcısında SQL'e çevrilemiyor (`InvalidOperationException`). Gerçek Postgres'e karşı uçtan uca test sırasında yakalandı, unit testler (InMemory) bunu yakalayamadı.
 
@@ -145,7 +145,9 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 
 **Otomatik Free plan atama (Faz 4.1)**: Identity Service, `POST /auth/register` başarılı olduğunda `UserRegisteredEvent`'i (fanout, `Messages.V1`) publish eder; Billing Service kendi bağımsız kuyruğuyla (`billing-user-registered-events`) tüketip `UserPlans`'a idempotent şekilde Free plan satırı ekler. `GET /plans` ve `GET /users/{userId}/plan` ile sorgulanabilir.
 
-**IAP doğrulama + webhook (Faz 4.2)**: `PaymentEvents(Provider, EventId)` unique — idempotency guard'ı, aynı Apple/Google webhook event'i iki kez teslim edilirse ikinci deneme buna çarpar. `UserSubscriptions(UserId)` unique — MVP kapsamında kullanıcı başına tek abonelik. `POST /billing/verify-purchase`, `POST /billing/webhooks/apple`, `POST /billing/webhooks/google` — detay ve gerçek altyapıya karşı uçtan uca doğrulama için bkz. `.claude/ARCHITECTURE.md` → Billing → Store IAP Doğrulama + Webhook.
+**IAP doğrulama + webhook (Faz 4.2)**: `PaymentEvents(Provider, EventId)` unique — idempotency guard'ı, aynı Apple/Google webhook event'i iki kez teslim edilirse ikinci deneme buna çarpar. `UserSubscriptions(UserId)` unique — MVP kapsamında kullanıcı başına tek abonelik. `POST /verify-purchase`, `POST /webhooks/apple`, `POST /webhooks/google` (servisin kendi route'ları — Gateway `/api/billing` prefix'ini soyduğundan önekSİZ, bkz. `.claude/ARCHITECTURE.md` → Billing → routing hatası notu) — detay ve gerçek altyapıya karşı uçtan uca doğrulama için bkz. `.claude/ARCHITECTURE.md` → Billing → Store IAP Doğrulama + Webhook.
+
+**Limit kontrolü (Faz 4.3)**: `GET /limits/{userId}` — kullanıcının henüz bir planı olmadığı durumda bile (Free'ye düşerek) her zaman bir limit döner, 404 vermez. Subscription Service, yeni bir `UserWatch` oluşturmadan önce bunu çağırır; Billing'e ulaşılamazsa fail-open (izin verir) — detay için bkz. `.claude/ARCHITECTURE.md` → Billing → Limit Kontrol Middleware'i.
 
 > Faz 4.2 şeması taslaktır; ilgili migration'la netleştirilecektir.
 

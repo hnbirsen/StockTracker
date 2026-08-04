@@ -11,6 +11,7 @@ public interface IUserPlanService
     Task SetPlanAsync(Guid userId, Guid planId);
     Task<List<PlanDto>> GetPlansAsync();
     Task<UserPlanDto?> GetUserPlanAsync(Guid userId);
+    Task<UserLimitsDto> GetUserLimitsAsync(Guid userId);
 }
 
 public class UserPlanService : IUserPlanService
@@ -80,5 +81,19 @@ public class UserPlanService : IUserPlanService
                 userPlan.Plan.Id, userPlan.Plan.Name, userPlan.Plan.MaxTrackedProducts,
                 userPlan.Plan.CheckFrequencyMinutes, userPlan.Plan.AppStoreProductId, userPlan.Plan.PlayStoreProductId),
             userPlan.AssignedAt);
+    }
+
+    // Faz 4.3 — Subscription Service, yeni bir UserWatch oluşturmadan önce bunu çağırır. Kullanıcının
+    // henüz bir UserPlan satırı yoksa (ör. UserRegisteredEvent henüz Billing'e ulaşmadı/işlenmedi — kısa
+    // süreli bir yarış durumu) Free plan limitlerine düşülür; 404 dönüp Subscription'ı bloke etmez.
+    public async Task<UserLimitsDto> GetUserLimitsAsync(Guid userId)
+    {
+        var userPlan = await _db.UserPlans
+            .Include(up => up.Plan)
+            .FirstOrDefaultAsync(up => up.UserId == userId);
+
+        var plan = userPlan?.Plan ?? await _db.Plans.FirstAsync(p => p.Id == BillingDbContext.FreePlanId);
+
+        return new UserLimitsDto(userId, plan.Name, plan.MaxTrackedProducts, plan.CheckFrequencyMinutes);
     }
 }

@@ -94,7 +94,8 @@ flowchart LR
 | Stock Poller (Quartz.NET, watcher-count priority tiers, closes the loop via a `StockResultEvent` consumer) | ✅ Done |
 | Notification Service (restock detection, idempotent `StockResultEvent` consumer, real SendGrid email; FCM wired but unused pending device-token storage from Faz 5.4) | ✅ Done |
 | Billing Service — plan model + event-driven auto Free-plan assignment (`UserRegisteredEvent`) | ✅ Done |
-| Billing Service — App Store/Play Store IAP verification (`POST /billing/verify-purchase`) + webhooks (`POST /billing/webhooks/apple`, `/google`), idempotent, no separate payment gateway | ✅ Done — pending real Apple Developer/Play Console credentials |
+| Billing Service — App Store/Play Store IAP verification (`POST /verify-purchase`) + webhooks (`POST /webhooks/apple`, `/google`), idempotent, no separate payment gateway | ✅ Done — pending real Apple Developer/Play Console credentials |
+| Watch limit enforcement — `GET /limits/{userId}` (Billing) + `POST /watches` plan-limit check (Subscription), fail-open if Billing unreachable | ✅ Done |
 | React Web frontend | 🔜 Planned |
 | React Native + Expo mobile app | 🔜 Planned |
 

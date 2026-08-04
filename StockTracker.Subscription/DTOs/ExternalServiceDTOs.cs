@@ -17,3 +17,11 @@ public record StoreDto(
     Guid BrandId,
     string BrandSpecificStoreId
 );
+
+// Billing Service GET /limits/{userId} yanıtının ihtiyaç duyulan alt kümesi (Faz 4.3).
+public record UserLimitsResponse(
+    Guid UserId,
+    string PlanName,
+    int MaxTrackedProducts,
+    int CheckFrequencyMinutes
+);

@@ -18,7 +18,7 @@ public interface IPaymentEventProcessor
         CancellationToken cancellationToken);
 }
 
-// Apple webhook, Google webhook ve (dolaylı olarak) POST /billing/verify-purchase'ın ortak çekirdeği:
+// Apple webhook, Google webhook ve (dolaylı olarak) POST /verify-purchase'ın ortak çekirdeği:
 // event'i idempotent şekilde kaydeder, eşleşen UserSubscription'ı günceller, kullanıcının Plan'ını
 // (Free <-> Premium) abonelik durumuna göre senkronize eder.
 public class PaymentEventProcessor : IPaymentEventProcessor
@@ -67,7 +67,7 @@ public class PaymentEventProcessor : IPaymentEventProcessor
 
         if (subscription is null)
         {
-            // Bu transaction/token için henüz POST /billing/verify-purchase ile bir UserId eşleşmesi
+            // Bu transaction/token için henüz POST /verify-purchase ile bir UserId eşleşmesi
             // kurulmamış — event yine de idempotency/denetim amacıyla kaydedildi, ama bir kullanıcının
             // planını güncelleyecek bir bilgimiz yok.
             _logger.LogWarning(

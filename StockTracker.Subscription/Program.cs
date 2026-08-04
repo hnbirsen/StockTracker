@@ -26,6 +26,10 @@ var storeReferenceServiceUrl = Environment.GetEnvironmentVariable("STORE_REFEREN
     ?? builder.Configuration["StoreReferenceServiceUrl"]
     ?? throw new InvalidOperationException("StoreReferenceServiceUrl bulunamadı.");
 
+var billingServiceUrl = Environment.GetEnvironmentVariable("BILLING_SERVICE_URL")
+    ?? builder.Configuration["BillingServiceUrl"]
+    ?? throw new InvalidOperationException("BillingServiceUrl bulunamadı.");
+
 builder.Services.AddDbContext<SubscriptionDbContext>(options =>
     options.UseNpgsql(connectionString));
 
@@ -43,6 +47,11 @@ builder.Services.AddHttpClient<IProductServiceClient, ProductServiceClient>(clie
 builder.Services.AddHttpClient<IStoreReferenceServiceClient, StoreReferenceServiceClient>(client =>
 {
     client.BaseAddress = new Uri(storeReferenceServiceUrl);
+});
+
+builder.Services.AddHttpClient<IBillingServiceClient, BillingServiceClient>(client =>
+{
+    client.BaseAddress = new Uri(billingServiceUrl);
 });
 
 // StockResultEvent (fanout) tüketilir — Faz 3.2: poller'ın gönderdiği CheckStockCommand'lara verilen

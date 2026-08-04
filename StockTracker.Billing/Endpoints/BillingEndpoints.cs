@@ -21,9 +21,19 @@ public static class BillingEndpoints
             return userPlan is not null ? Results.Ok(userPlan) : Results.NotFound();
         });
 
-        // POST /billing/verify-purchase — mobil client, App Store/Play Store'da tamamladığı satın almanın
+        // GET /limits/{userId} — Subscription Service'in yeni bir UserWatch oluşturmadan önce sorduğu
+        // limit bilgisi (Faz 4.3). Kullanıcının planı yoksa Free limitlerine düşer, asla 404 vermez.
+        app.MapGet("/limits/{userId:guid}", async (Guid userId, IUserPlanService service) =>
+        {
+            var limits = await service.GetUserLimitsAsync(userId);
+            return Results.Ok(limits);
+        });
+
+        // POST /verify-purchase — mobil client, App Store/Play Store'da tamamladığı satın almanın
         // receipt/token'ını gönderir; ilgili store'un server-to-server API'sine karşı doğrulanır.
-        app.MapPost("/billing/verify-purchase", async (VerifyPurchaseRequest request, IPurchaseVerificationService service, CancellationToken ct) =>
+        // Not: Gateway "/api/billing" prefix'ini soyduğu için servisin kendi route'ları "/billing/..."
+        // OLMAMALI (diğer tüm servislerle aynı konvansiyon — bkz. .claude/ARCHITECTURE.md).
+        app.MapPost("/verify-purchase", async (VerifyPurchaseRequest request, IPurchaseVerificationService service, CancellationToken ct) =>
         {
             if (request.UserId == Guid.Empty)
                 return Results.BadRequest("UserId boş olamaz.");
@@ -36,17 +46,17 @@ public static class BillingEndpoints
                 : Results.Json(new { error = result.FailureReason }, statusCode: StatusCodes.Status422UnprocessableEntity);
         });
 
-        // POST /billing/webhooks/apple — App Store Server Notifications V2. Güvenlik, isteğin kendisindeki
+        // POST /webhooks/apple — App Store Server Notifications V2. Güvenlik, isteğin kendisindeki
         // JWS imzasından geliyor (bkz. AppleJwsVerifier) — ayrı bir paylaşılan secret/header yok.
-        app.MapPost("/billing/webhooks/apple", async (AppleWebhookRequest body, IAppleWebhookProcessor processor, CancellationToken ct) =>
+        app.MapPost("/webhooks/apple", async (AppleWebhookRequest body, IAppleWebhookProcessor processor, CancellationToken ct) =>
         {
             var success = await processor.ProcessAsync(body.SignedPayload, ct);
             return success ? Results.Ok() : Results.BadRequest();
         });
 
-        // POST /billing/webhooks/google — Cloud Pub/Sub push. Güvenlik, Authorization header'ındaki
+        // POST /webhooks/google — Cloud Pub/Sub push. Güvenlik, Authorization header'ındaki
         // Google-imzalı OIDC bearer token'dan geliyor (bkz. GoogleOidcTokenValidator).
-        app.MapPost("/billing/webhooks/google", async (HttpRequest httpRequest, IGoogleWebhookProcessor processor, CancellationToken ct) =>
+        app.MapPost("/webhooks/google", async (HttpRequest httpRequest, IGoogleWebhookProcessor processor, CancellationToken ct) =>
         {
             using var reader = new StreamReader(httpRequest.Body);
             var body = await reader.ReadToEndAsync(ct);

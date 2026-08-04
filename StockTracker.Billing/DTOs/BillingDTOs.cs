@@ -32,3 +32,13 @@ public record UserSubscriptionDto(
     string Status,
     DateTime? CurrentPeriodEnd
 );
+
+// Faz 4.3 — Subscription Service'in yeni bir UserWatch oluşturmadan önce sorduğu limit bilgisi.
+// Kullanıcının henüz bir UserPlan satırı yoksa (ör. UserRegisteredEvent henüz işlenmedi) Free plan
+// limitlerine düşülür — hiçbir zaman 404/hata döndürmez, her zaman uygulanabilir bir limit verir.
+public record UserLimitsDto(
+    Guid UserId,
+    string PlanName,
+    int MaxTrackedProducts,
+    int CheckFrequencyMinutes
+);

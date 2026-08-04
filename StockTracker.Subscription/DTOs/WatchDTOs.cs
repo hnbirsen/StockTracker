@@ -14,3 +14,7 @@ public record WatchDto(
     DateTime? LastCheckedAt,
     DateTime CreatedAt
 );
+
+// Faz 4.3 — dedup nedeniyle her zaman bir WatchDto döner değil; plan limiti aşıldığında Watch=null,
+// ErrorCode="WATCH_LIMIT_EXCEEDED" ile başarısız sonuç döner.
+public record CreateWatchResult(bool Success, WatchDto? Watch, string? ErrorCode, string? ErrorMessage);
