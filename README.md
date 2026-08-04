@@ -54,6 +54,8 @@ flowchart LR
     Notification -.-> MQ
     MQ -.-> Scraper[BershkaScraper :5009]
     Scraper -.-> MQ
+    MQ -.-> ZaraScraper[ZaraScraper :5010]
+    ZaraScraper -.-> MQ
 ```
 
 ## Services
@@ -70,6 +72,7 @@ flowchart LR
 | StockTracker.Billing | 5007 | Freemium plans, App Store/Play Store IAP verification + webhooks | ✅ Done — plan model (Faz 4.1) + IAP verification/webhooks (Faz 4.2), pending real Apple/Google credentials |
 | StockTracker.Notification | 5008 | FCM push + email notifications | ✅ Done — restock detection, idempotency, real SMTP integration (own mail server, no 3rd-party email provider) wired (real Firebase account + SMTP server credentials pending) |
 | StockTracker.BershkaScraper | 5009 | Consumes `CheckStockCommand`, publishes `StockResultEvent` | ✅ Done — real Bershka/Inditex API wired up |
+| StockTracker.ZaraScraper | 5010 | Consumes `CheckStockCommand`, publishes `StockResultEvent` | ✅ Done — real Zara API wired up (live end-to-end Chrome smoke-test still pending) |
 | StockTracker.Shared.Contracts | — | Shared DTOs, RabbitMQ message contracts (`CheckStockCommand`, `StockResultEvent`) and MassTransit setup | ✅ In use |
 | StockTracker.Shared.Scraping | — | Cross-scraper shared library — Redis-backed `IScraperHealthLogService`, plus `Http/` (host-based token-bucket rate limiting, realistic rotating browser header profiles, Retry-After-aware retry + separate bot-detection circuit breaker) | ✅ In use |
 
@@ -88,6 +91,7 @@ flowchart LR
 | Store Reference Service (Bershka seed data) | ✅ Done |
 | Search Orchestrator + RabbitMQ integration | ✅ Done |
 | Bershka Scraper (consumer, Polly, UA rotation, real Bershka/Inditex stock + store-locator API, `StockResultEvent` publish) | ✅ Done |
+| Zara Scraper (consumer, real Zara SSR online stock + Akamai-protected store-availability API via in-page Playwright fetch, velocity-based rate limiting, `StockResultEvent` publish) | ✅ Done |
 | Scraper Health Monitoring (`GET /health/scraper-stats`, `GET /health/scraper-failures`, Redis-backed, shared across future scrapers) | ✅ Done |
 | Scraper scalability & bot-detection hardening (host rate limiting, 429/`Retry-After`, bot-detection circuit breaker, realistic header profiles) | ✅ Done — proxy/IP rotation deferred (needs a paid provider, see ROADMAP Faz 7) |
 | Subscription Service (watch groups, dedup, `POST`/`GET`/`DELETE /watches`) | ✅ Done |
@@ -112,7 +116,7 @@ flowchart LR
 | Messaging | RabbitMQ 3 |
 | Password hashing | BCrypt.Net |
 | Authentication | JWT Bearer tokens |
-| Scraping | Playwright (real Chrome channel, Bershka Scraper) |
+| Scraping | Playwright (real Chrome channel, Bershka Scraper, Zara Scraper) |
 | Web frontend | React (planned) |
 | Mobile | React Native + Expo (planned) |
 | Payment | App Store / Play Store in-app purchase (planned) — no separate payment gateway |
@@ -139,7 +143,7 @@ The PostgreSQL init script at `docker/postgres-init/init-multiple-dbs.sh` create
 
 **Pending real-world credentials**: every external integration built so far (own SMTP server, FCM, Apple App Store Server API, Google Play Developer API) is wired against the real protocol/API but currently running on `.env` placeholders — see `.claude/PENDING_INPUTS.md` for the full checklist of accounts/credentials still needed and what happens without them (graceful degrade, not a crash). Note: email intentionally does **not** use a third-party provider (SendGrid/Postmark/SES) — by user decision, it sends via your own SMTP server (MailKit).
 
-**One extra one-time step if you'll run `StockTracker.BershkaScraper`:** it drives a real Chrome via Playwright (see Development Notes below — the bundled Chromium gets blocked, a real Chrome channel is required), and `dotnet restore` does not download the browser binary. Build the project once, then run the Playwright browser install (`chrome` channel, not `chromium`) — see `.claude/ENVIRONMENT_SETUP.md` → "Bershka Scraper — Playwright/Chrome Kurulumu" for exact commands. This step isn't visible from a fresh clone because it lands in the gitignored `bin/` folder, so it's easy to miss — do it before your first `dotnet run --project StockTracker.BershkaScraper`.
+**One extra one-time step if you'll run `StockTracker.BershkaScraper` or `StockTracker.ZaraScraper`:** both drive a real Chrome via Playwright (see Development Notes below — the bundled Chromium gets blocked, a real Chrome channel is required), and `dotnet restore` does not download the browser binary. Build the project once, then run the Playwright browser install (`chrome` channel, not `chromium`) — see `.claude/ENVIRONMENT_SETUP.md` → "Bershka Scraper — Playwright/Chrome Kurulumu" for exact commands (same install, shared by both scrapers). This step isn't visible from a fresh clone because it lands in the gitignored `bin/` folder, so it's easy to miss — do it before your first `dotnet run --project StockTracker.BershkaScraper` or `StockTracker.ZaraScraper`.
 
 ## Running the Project
 
@@ -156,6 +160,7 @@ dotnet run --project StockTracker.Subscription      # :5006
 dotnet run --project StockTracker.Billing           # :5007
 dotnet run --project StockTracker.Notification      # :5008
 dotnet run --project StockTracker.BershkaScraper    # :5009 (RabbitMQ consumer only, no HTTP endpoints besides /health)
+dotnet run --project StockTracker.ZaraScraper       # :5010 (RabbitMQ consumer only, no HTTP endpoints besides /health)
 ```
 
 When working on a single service, bring up only the infrastructure and run that service from your IDE:
@@ -169,7 +174,7 @@ Health check all services:
 
 ```bash
 curl http://localhost:8000/health/gateway
-for port in 5001 5002 5003 5004 5005 5006 5007 5008 5009; do
+for port in 5001 5002 5003 5004 5005 5006 5007 5008 5009 5010; do
   echo -n ":$port → " && curl -s http://localhost:$port/health
   echo
 done
@@ -294,7 +299,7 @@ done
   }
 ]
 ```
-Seed data currently covers Bershka only (4 stores across Istanbul/Ankara/Izmir) — `brandSpecificStoreId` values are now real Bershka store IDs from the store-locator API (e.g. `16884` for City's Kozyatağı in Kadıköy), applied via the `UpdateBershkaStoresWithRealIds` migration. See `.claude/DATABASE.md` for the full mapping.
+Seed data covers Bershka (4 stores, real store-locator IDs, e.g. `16884` for City's Kozyatağı in Kadıköy — `UpdateBershkaStoresWithRealIds` migration) and Zara (4 matching stores across the same cities/districts, real `physicalStoreId`s, e.g. `251` for Kentpark in Ankara — `AddZaraStores` migration). See `.claude/DATABASE.md` for the full mapping.
 
 ### Search Orchestrator (`:5005`)
 
@@ -375,6 +380,8 @@ All secrets are provided via environment variables, never hardcoded in `appsetti
 | `STORE_DB_CONNECTION` | Store Reference Service |
 | `BERSHKA_STOCK_API_BASE_URL` | Bershka Scraper — `https://api.inditex.com` (stock query endpoint) |
 
+Zara Scraper needs no equivalent `ZARA_STOCK_API_BASE_URL` — unlike Bershka, there is no separate stock API host; both online and store-availability data are read via Playwright directly against `www.zara.com` (relative paths hardcoded in `PlaywrightZaraFetcher`, since the endpoint is Akamai-protected and must be called from within an already-cleared browser session — see Development Notes below). It reuses `REDIS_CONNECTION` and the shared RabbitMQ env vars, same as Bershka.
+
 Copy `.env example` to `.env` and fill in the values. The `.env` file is gitignored.
 
 ## CI
@@ -396,6 +403,7 @@ GitHub Actions workflow at `.github/workflows/ci.yml` runs on every push to `mai
 - MassTransit is pinned to `8.5.5` in `StockTracker.Shared.Contracts` — v9+ requires a commercial license, so do not bump past the 8.x line without re-checking licensing.
 - Message contracts live in `StockTracker.Shared.Contracts/Messages/V1/` and are wired up per-service via `AddStockTrackerRabbitMq(...)`. Queue naming follows `QueueNaming.StockCheckQueue(brandName)` → `stock.check.{brandName}`, one isolated queue per brand.
 - **Bershka Scraper reads real per-size stock data from the product page itself** — Bershka's product pages are behind Akamai Bot Manager, so a plain `HttpClient` can never load them, and even Playwright's bundled Chromium gets an instant "Access Denied"; `PlaywrightPdpFetcher` drives a real Chrome channel instead. Rather than parsing the page's minified JS as text (unreliable — some pages hoist string values into shared variables, so the real value is never written as a literal), it walks the page's live Vue component tree (`page.EvaluateAsync`) to read the already-resolved size/stock/part-number data straight from JS runtime state. Results are cached in Redis per product URL (15 min TTL) so repeated searches for the same product don't re-trigger Playwright. The store-specific physical stock check then queries `api.inditex.com/.../stock/campaign/...` with the real part-number read from the page. **Requires a one-time Playwright Chrome-channel install per machine** — see `.claude/ENVIRONMENT_SETUP.md` and the Setup section above. Full details, the productCode-format pitfalls that led here, and known limitations are in `.claude/ARCHITECTURE.md` → Bershka Scraper.
+- **Zara Scraper's store-availability check has no Akamai-free API to fall back on, unlike Bershka** — Bershka has a separate stock API host (`api.inditex.com`) that isn't behind Akamai, so a plain resilient `HttpClient` can call it directly once the part-number is known. Zara has no such host: its `store-product-availability` endpoint lives on `www.zara.com` itself and is protected exactly like the product page (confirmed live: `curl` gets 403 even with a realistic User-Agent). So `PlaywrightZaraFetcher` calls it via an in-page `fetch()` (`page.EvaluateAsync`) after navigating to the product page, reusing the cookies from the Akamai-cleared browser session rather than a separate HTTP client. Online stock, by contrast, is simpler than Bershka's: Zara embeds it server-side as `window.zara.viewPayload.product.detail.colors[].sizes[]`, no Vue-tree walk needed. A live-verified quirk: the endpoint enforces **velocity-based** rate limiting — a handful of rapid successive store-availability calls (even to a query that had just succeeded) got the whole browser session blocked, which a 15s pause did not clear. `PlaywrightZaraFetcher` therefore serializes store queries through a semaphore with a mandatory ~6s gap between them. Full details (including the sparse-response semantics — a store missing from the response array means "no stock there", not an error) are in `.claude/ARCHITECTURE.md` → Zara Scraper.
 
 ## Project Structure
 
@@ -416,6 +424,7 @@ GitHub Actions workflow at `.github/workflows/ci.yml` runs on every push to `mai
 ├── StockTracker.Billing/
 ├── StockTracker.Notification/
 ├── StockTracker.BershkaScraper/
+├── StockTracker.ZaraScraper/
 ├── StockTracker.Shared.Contracts/
 ├── StockTracker.Shared.Scraping/
 ├── tests/                       # xUnit test projects, one per service

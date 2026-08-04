@@ -61,13 +61,18 @@ STORE_DB_CONNECTION=Host=localhost;Port=5432;Database=store_db;Username=...;Pass
 # Bershka Scraper — gerçek endpoint'ler (bkz. .claude/ARCHITECTURE.md > Bershka Scraper)
 BERSHKA_STOCK_API_BASE_URL=https://api.inditex.com
 # REDIS_CONNECTION zaten yukarıda tanımlı, Bershka Scraper da kullanır (PDP cache-aside)
+
+# Zara Scraper — ek bir env var GEREKMİYOR. Bershka'nın aksine ayrı bir stok API host'u yok;
+# hem online hem mağaza stoğu doğrudan www.zara.com'a karşı Playwright ile okunuyor (bkz.
+# .claude/ARCHITECTURE.md > Zara Scraper). REDIS_CONNECTION ve yukarıdaki paylaşılan RabbitMQ
+# değişkenleri zaten yeterli.
 ```
 
 `.env` dosyası `.gitignore`'da olmalı — repoya commit'lenmez. Sadece `.env example` (değersiz, key listesi) repoda tutulur.
 
-## Bershka Scraper — Playwright/Chrome Kurulumu (tek seferlik, manuel adım)
+## Bershka/Zara Scraper — Playwright/Chrome Kurulumu (tek seferlik, manuel adım)
 
-`StockTracker.BershkaScraper`, Bershka ürün sayfalarını (Akamai Bot Manager'ın arkasında olduğu için düz HTTP ile çekilemiyor — bkz. `.claude/ARCHITECTURE.md` > Bershka Scraper) Playwright ile **gerçek Chrome kanalını** çalıştırarak okur. Bu, `.NET` paket restore'unun (`dotnet restore`) **kapsamadığı** ayrı bir adım — NuGet paketi sadece Playwright'ın .NET API'sini indirir, tarayıcı binary'sini indirmez.
+`StockTracker.BershkaScraper` ve `StockTracker.ZaraScraper`, ürün sayfalarını (ikisi de Akamai Bot Manager'ın arkasında — Zara'da ayrıca `store-product-availability` endpoint'i de aynı korumaya sahip, bkz. `.claude/ARCHITECTURE.md` > Zara Scraper) Playwright ile **gerçek Chrome kanalını** çalıştırarak okur. Bu, `.NET` paket restore'unun (`dotnet restore`) **kapsamadığı** ayrı bir adım — NuGet paketi sadece Playwright'ın .NET API'sini indirir, tarayıcı binary'sini indirmez. Kurulum makine/tarayıcı-cache seviyesinde olduğu için (aşağıya bkz.) her iki servis için ayrı ayrı yapmaya gerek yok — biri için kurulduktan sonra diğeri de aynı önbellekten kullanır; yine de her iki projeyi de en az bir kez build etmek gerekir (`playwright.ps1`/`cli.js` script'i `bin/` altına oradan düşer).
 
 **Neden `chrome` kanalı, bundled `chromium` değil:** gerçek verilerle doğrulandı — Playwright'ın varsayılan (bundled) Chromium'u, standart stealth önlemlerine (UA maskeleme, `navigator.webdriver` gizleme) rağmen Akamai'den anında "Access Denied" alıyor. Gerçek Chrome kanalını sürmek bu engeli aşıyor (bkz. `.claude/ARCHITECTURE.md` > Bershka Scraper > Playwright + Redis cache-aside). Bu yüzden `chromium` değil `chrome` kurulmalı.
 
@@ -105,6 +110,7 @@ dotnet run --project StockTracker.Subscription     # :5006
 dotnet run --project StockTracker.Billing          # :5007
 dotnet run --project StockTracker.Notification     # :5008
 dotnet run --project StockTracker.BershkaScraper   # :5009
+dotnet run --project StockTracker.ZaraScraper      # :5010
 ```
 
 Sadece belirli bir servis üzerinde çalışıyorsan, altyapıyı ayağa kaldırıp o servisi IDE'den debug edebilirsin:

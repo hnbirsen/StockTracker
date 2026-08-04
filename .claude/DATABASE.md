@@ -67,6 +67,10 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 
 `bershka:pdp-sizes:{productUrl}` → ürün sayfasından (Playwright ile) okunan tüm bedenlerin listesi (`Name`, `Stock`, `PartNumber`, `MastersSizeId`, `ColorId`), 15 dakikalık TTL. Aynı ürüne yapılan art arda online/mağaza stok kontrolleri Playwright'ı tekrar tetiklemez (bkz. `.claude/ARCHITECTURE.md` — Bershka Scraper). Boş sonuç cache'lenmez.
 
+### Zara Scraper — Redis PDP cache-aside (kendi veritabanı yok)
+
+`zara:pdp-sizes:{productUrl}` → ürün sayfasının SSR verisinden (`window.zara.viewPayload`) okunan tüm bedenlerin listesi (`Name`, `Availability`, `ColorId`, `Sku`), 15 dakikalık TTL — yalnızca ONLINE stok için. Mağaza bazlı stok (`store-product-availability`) hiç önbelleklenmiyor, her zaman canlı sorgulanıyor (fiziksel stok daha hızlı değişiyor; Akamai hız-bazlı bloklamasına karşı zaten `PlaywrightZaraFetcher` içinde ayrı bir hız sınırlaması var — bkz. `.claude/ARCHITECTURE.md` → Zara Scraper).
+
 ### Scraper Health Monitoring — Redis, tüm marka scraper'ları arasında paylaşılan (kendi veritabanı yok)
 
 `scraper:health:{scraperName}:log` → her scraper denemesinin (`source`, `success`, `httpStatusCode`, `errorMessage`, `context` — hangi ürün URL'i/mağaza/partnumber üzerinde olduğu, `durationMs`, `timestamp`) `LPUSH` ile eklendiği, `LTRIM` ile son 500 kayıtla sınırlanan capped-list. Bilinçli olarak ayrı bir Postgres DB (`bershka_scraper_db` gibi) yerine bu kullanıldı — bkz. `.claude/ARCHITECTURE.md` → Bershka Scraper → Scraper Health Monitoring, "Tasarım kararı" notu. `StockTracker.Shared.Scraping` projesindeki `IScraperHealthLogService` üzerinden okunur/yazılır; Zara/Pull&Bear gibi gelecek scraper'lar aynı servisi kendi `scraperName`'leriyle çağırarak sıfır ek altyapıyla kullanabilir.
@@ -82,10 +86,12 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 | Marka | Pattern | Confidence |
 |---|---|---|
 | Bershka | `^\d{11}$` | High |
-| Zara | `^\d{5}/\d{3}/\d{2,3}$` | High |
+| Zara | `^\d{4}/\d{3}/\d{3}$` | High |
 | Pull&Bear | `^\d{8}$` | Low |
 
 > Bershka'nın pattern'i, gerçek bershka.com ürün sayfaları üzerinden doğrulandı (Faz 2.4): önde sıfır + 4 haneli model + 3 haneli varyant + 3 haneli renk kodu (ör. REF `2891/054/426` → `02891054426`), `BershkaStockApiClient`'ın stok API'sine gönderdiği `productCode` ile birebir aynı format. Eski `^\d{7,9}$` deseni doğrulanmamış bir tahmindi.
+>
+> Zara'nın pattern'i, gerçek zara.com ürün sayfaları üzerinden doğrulandı (Faz 6.1): 4 haneli `displayReference` + 3 haneli varyant + 3 haneli `colors[].id` (ör. `5063/821/802`), çoklu gerçek örnekle (9083/479, 5372/323, 0962/307, ...) doğrulandı. Eski `^\d{5}/\d{3}/\d{2,3}$` deseni doğrulanmamış bir tahmindi, ilk grup 5 değil 4 rakamdı.
 
 ### store_db
 
@@ -105,6 +111,17 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 | Izmir | Bornova | Forum Bornova | `8426` |
 
 > `BrandSpecificStoreId` değerleri artık Bershka'nın gerçek mağaza bulucu API'sinden (`itxrest/2/bam/store/{chainId}/physical-store`) dönen gerçek `physicalStoreId` değerleri (Faz 2.4) — `BershkaStockApiClient.CheckStoreStockAsync` bunları doğrudan stok API'sinin `physicalStoreId` parametresine geçiriyor. Her mağaza, ilgili il/ilçeye en yakın gerçek Bershka mağazasıdır (Kadıköy için Kozyatağı — Kadıköy ilçesi sınırları içinde bir mahalle; Şişli/Bornova için isim birebir eşleşiyor; Çankaya için adreste "ÇANKAYA" geçen mağaza seçildi, çünkü en yakın 5 sonuç arasında marka adı "Armada" olan bir mağaza yoktu). Detay için bkz. `.claude/ARCHITECTURE.md` → Bershka Scraper.
+
+**Seed data:** Zara — 4 mağaza (Faz 6.1, Bershka'nın mevcut 4 iliyle eşleşecek şekilde):
+
+| Şehir | İlçe | Mağaza | BrandSpecificStoreId |
+|---|---|---|---|
+| Istanbul | Kadikoy | Bağdat Caddesi | `3231` |
+| Istanbul | Sisli | Cevahir AVM | `12692` |
+| Ankara | Cankaya | Kentpark | `251` |
+| Izmir | Bornova | Forum Bornova | `3643` |
+
+> `BrandSpecificStoreId` değerleri Zara'nın kendi mağaza listesi sayfasından (`z-maazalar-st1404.html` → `window.zara.viewPayload.physicalStoresList`) okunan gerçek `physicalStoreId` değerleri (Faz 6.1) — `store-product-availability` endpoint'inin `physicalStoreIds` parametresine doğrudan geçiriliyor. Kentpark ve Forum Bornova, Bershka'nın seçtiği AVM'lerle birebir aynı (isim eşleşmesiyle doğrulandı). Detay için bkz. `.claude/ARCHITECTURE.md` → Zara Scraper.
 
 `GET /stores?brandId=&city=&district=` — tüm filtreler opsiyonel, `city`/`district` karşılaştırması case-insensitive, sadece `IsActive=true` kayıtlar döner. `GET /stores/{id}` (Faz 3.2) — tek mağaza, Subscription Service'in Stock Poller'ı `BrandSpecificStoreId` çözmek için kullanır.
 

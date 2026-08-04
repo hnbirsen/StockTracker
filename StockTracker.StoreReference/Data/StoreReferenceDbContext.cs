@@ -27,7 +27,15 @@ public class StoreReferenceDbContext : DbContext
         // doğrudan bu ID'lerle sorgu atması gerekiyor. Her mağaza, ilgili il/ilçeye en yakın (Kadıköy için
         // Kozyatağı — Kadıköy ilçesi sınırları içinde bir mahalle; Şişli/Bornova için isim birebir eşleşiyor;
         // Çankaya için adreste "ÇANKAYA" geçen mağaza) gerçek Bershka mağazasıdır.
+        // Zara mağaza listesi (Faz 6.1) — BrandSpecificStoreId, Zara'nın kendi
+        // `z-maazalar-st1404.html` sayfasından (window.zara.viewPayload.physicalStoresList) okunan GERÇEK
+        // physicalStoreId değerleri; aynı ID'ler store-product-availability sorgularında doğrudan
+        // kullanılabiliyor (bkz. .claude/ARCHITECTURE.md > Zara Scraper). Bershka'nın mevcut il/ilçe
+        // seçimiyle birebir eşleşecek şekilde seçildi: Kentpark (Çankaya) ve Forum Bornova (Bornova) isim
+        // olarak Bershka'nınkiyle birebir aynı AVM; Kadıköy/Şişli için ilçe sınırları içindeki gerçek Zara
+        // mağazaları kullanıldı.
         var bershkaId = Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+        var zaraId = Guid.Parse("b2c3d4e5-f6a7-8901-bcde-f12345678901");
         var seedCreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         modelBuilder.Entity<Store>().HasData(
@@ -76,6 +84,54 @@ public class StoreReferenceDbContext : DbContext
                 District = "Bornova",
                 StoreName = "Forum Bornova",
                 BrandSpecificStoreId = "8426",
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d2222222-0000-0000-0000-000000000001"),
+                BrandId = zaraId,
+                BrandName = "Zara",
+                City = "Istanbul",
+                District = "Kadikoy",
+                StoreName = "Bağdat Caddesi",
+                BrandSpecificStoreId = "3231",
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d2222222-0000-0000-0000-000000000002"),
+                BrandId = zaraId,
+                BrandName = "Zara",
+                City = "Istanbul",
+                District = "Sisli",
+                StoreName = "Cevahir AVM",
+                BrandSpecificStoreId = "12692",
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d2222222-0000-0000-0000-000000000003"),
+                BrandId = zaraId,
+                BrandName = "Zara",
+                City = "Ankara",
+                District = "Cankaya",
+                StoreName = "Kentpark",
+                BrandSpecificStoreId = "251",
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d2222222-0000-0000-0000-000000000004"),
+                BrandId = zaraId,
+                BrandName = "Zara",
+                City = "Izmir",
+                District = "Bornova",
+                StoreName = "Forum Bornova",
+                BrandSpecificStoreId = "3643",
                 IsActive = true,
                 CreatedAt = seedCreatedAt
             }

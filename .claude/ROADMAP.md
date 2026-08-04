@@ -217,10 +217,13 @@ Bershka entegrasyonu sırasında doğrulandı: hedef siteler en azından User-Ag
 
 ## Faz 6 — Ek Markalar + Stabilizasyon
 
-### Faz 6.1 — Yeni Marka Onboarding Şablonu 🔜
-- [ ] Marka ekleme checklist dokümanı (regex keşfi → site-search → store mapping → scraper → health monitoring)
-- [ ] Zara scraper ekleme
+### Faz 6.1 — Yeni Marka Onboarding Şablonu 🔄 (Zara tamamlandı, Pull&Bear planlanan)
+
+Faz 5 (frontend) tasarım beklerken kullanıcı kararıyla öne alındı — "faz 5'i beklerken 6'ya geçelim ve 6.1'den devam edelim".
+
+- [x] **Zara scraper ekleme (`StockTracker.ZaraScraper`, port 5010)** — Bershka'daki gibi tamamen canlı zara.com trafiğiyle (network capture + curl) keşfedildi, hiçbir endpoint/format tahmin edilmedi. Detaylı bulgular ve mimari kararlar için bkz. `.claude/ARCHITECTURE.md` → Zara Scraper: gerçek ürün kodu formatı (`^\d{4}/\d{3}/\d{3}$`, brand_db regex'i düzeltildi), online stok (`window.zara.viewPayload` SSR verisi), mağaza bazlı stok (`store-product-availability` endpoint'i — kullanıcının "sonraya bırakamayız" ısrarıyla derinlemesine araştırıldı; Akamai korumalı, `productId`=URL'in `v1` parametresi, seyrek/sparse yanıt semantiği, hıza dayalı Akamai bloklaması bulundu ve `PlaywrightZaraFetcher`'a rate-limiting olarak yansıtıldı), `store_db`'ye gerçek mağaza ID'leri eklendi (Kentpark/Ankara=251, Forum Bornova/Izmir=3643, Bağdat Cad./Kadıköy=3231, Cevahir/Şişli=12692). 20 unit test. **Henüz gerçek Chrome/Playwright ile canlı uçtan uca smoke-test yapılmadı** (Bershka'nın 5 turluk doğrulama sürecine benzer bir aşama kaldı).
 - [ ] Pull&Bear scraper ekleme
+- [ ] Marka ekleme checklist dokümanı (regex keşfi → site-search → store mapping → scraper → health monitoring) — Zara + Bershka deneyiminden sonra, Pull&Bear'dan önce yazılması daha faydalı olacak
 
 ### Faz 6.2 — Uçtan Uca Yük/Stabilite Testi 🔜
 - [ ] 50-100 sahte kullanıcı ile watch-group dedup testi

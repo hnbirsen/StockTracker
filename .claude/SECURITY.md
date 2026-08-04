@@ -28,8 +28,6 @@
   - Rate limiting ile hedef sitelere aşırı yük bindirme
   - `robots.txt`'i mümkün olduğunca dikkate al
   - Kişisel veri scrape etme (yalnızca ürün/stok verisi)
-  - Ölçek büyüdükçe marka bazlı hukuki risk değerlendirmesi yenilenmeli
-  - Affiliate programına dahil olmak hem gelir hem meşruiyet sağlar
 
 ## Ödeme Güvenliği (App Store / Play Store In-App Purchase)
 

@@ -23,7 +23,11 @@ public class BrandDetectionDbContext : DbContext
         // üzerinden doğrulandı (bkz. .claude/ARCHITECTURE.md > Bershka Scraper) — BershkaStockApiClient'ın
         // stok API'sine gönderdiği "productCode" ile birebir aynı format olmalı. Eski `^\d{7,9}$` deseni
         // doğrulanmamış bir tahmindi ve gerçek formatla uyuşmuyordu.
-        // Seed: Zara — 5 rakam / 3 rakam / 3 rakam formatı (örn. 12345/678/123)
+        // Seed: Zara — 4 rakam / 3 rakam / 3 rakam formatı (displayReference + colorId, ör. "5063/821/802").
+        // Faz 6.1'de gerçek zara.com ürün sayfaları üzerinden doğrulandı (bkz. .claude/ARCHITECTURE.md >
+        // Zara Scraper) — çoklu gerçek örnekle (9083/479, 5372/323, 0962/307, 6224/308, ...) doğrulandı.
+        // Eski `^\d{5}/\d{3}/\d{2,3}$` deseni doğrulanmamış bir tahmindi, gerçek formatla uyuşmuyordu
+        // (ilk grup 5 değil 4 rakam, renk kodu her zaman 3 rakam).
         // Seed: Pull&Bear — 8 haneli sayısal
         var bershkaId = Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
         var zaraId = Guid.Parse("b2c3d4e5-f6a7-8901-bcde-f12345678901");
@@ -47,7 +51,7 @@ public class BrandDetectionDbContext : DbContext
                 Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
                 BrandId = zaraId,
                 BrandName = "Zara",
-                RegexPattern = @"^\d{5}/\d{3}/\d{2,3}$",
+                RegexPattern = @"^\d{4}/\d{3}/\d{3}$",
                 Confidence = ConfidenceLevel.High,
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
