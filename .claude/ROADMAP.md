@@ -162,10 +162,13 @@ Bershka entegrasyonu sırasında doğrulandı: hedef siteler en azından User-Ag
 >
 > **Sıralama bağımlılığı**: gerçek bir satın alma akışının uçtan uca test edilmesi mobil client gerektirir (Faz 5.4, bu fazdan **sonra** geliyor) — Faz 4'te Billing Service'in doğrulama/webhook mantığı Apple/Google'ın sağladığı örnek sandbox payload'larıyla test edilecek, "gerçek cihazda gerçek satın alma" doğrulaması Faz 5.4 tamamlandıktan sonra yapılabilecek. Bu, projenin genelindeki "canlı/gerçek altyapıya karşı doğrula" prensibinden bilinçli bir sapma — burada engel bizim kodumuz değil, henüz var olmayan bir mobil client.
 
-### Faz 4.1 — Plan Modeli 🔜
-- [ ] `Plans` tablosu (`MaxTrackedProducts`, `CheckFrequencyMinutes`, `AppStoreProductId`, `PlayStoreProductId`) — **`Price` DB'de tutulmaz**: gerçek fiyat App Store Connect/Play Console'da tanımlanır (bölgeye göre değişen fiyatlandırma, store'ların kendi vergi/kur hesaplaması var — DB'de ayrıca tutmak "kaynak neresi" çelişkisi yaratır ve senkronizasyon yükü ekler)
-- [ ] Free ve Premium plan seed data — `AppStoreProductId`/`PlayStoreProductId` alanları, ilgili store konsollarında gerçek ürün oluşturulana kadar `null`
-- [ ] Yeni kullanıcıya otomatik Free plan atanması
+### Faz 4.1 — Plan Modeli ✅ Tamamlandı
+- [x] `Plans` tablosu (`MaxTrackedProducts`, `CheckFrequencyMinutes`, `AppStoreProductId`, `PlayStoreProductId`) — **`Price` DB'de tutulmaz**: gerçek fiyat App Store Connect/Play Console'da tanımlanır (bölgeye göre değişen fiyatlandırma, store'ların kendi vergi/kur hesaplaması var — DB'de ayrıca tutmak "kaynak neresi" çelişkisi yaratır ve senkronizasyon yükü ekler)
+- [x] Free ve Premium plan seed data (`FreePlanId`/`PremiumPlanId` sabit GUID'ler) — `AppStoreProductId`/`PlayStoreProductId` alanları, ilgili store konsollarında gerçek ürün oluşturulana kadar `null`
+- [x] Yeni kullanıcıya otomatik Free plan atanması — **event-driven**: Identity Service, `POST /auth/register` başarılı olduğunda `UserRegisteredEvent`'i (yeni, `Messages.V1`, fanout) publish eder (kayıt işlemini bloklamaz, fire-and-forget); Billing Service kendi bağımsız `billing-user-registered-events` kuyruğuyla bunu tüketip `UserPlanService.AssignFreePlanAsync` ile Free plan atar — idempotent (kullanıcının zaten bir planı varsa dokunmaz, at-least-once teslimatta çift atama olmaz)
+- [x] `GET /plans` (aktif planların listesi) ve `GET /users/{userId}/plan` (kullanıcının güncel planı) endpoint'leri — ikincisi Faz 4.3'teki limit kontrolünün üzerine kurulacağı temel
+- [x] Unit testler: `tests/StockTracker.Billing.Tests` — 5 test (Free plan atama, idempotent tekrar atama, aktif/pasif plan filtreleme, kullanıcı planı sorgulama var/yok senaryoları); `tests/StockTracker.Identity.Tests`'e 2 yeni test (`UserRegisteredEvent`'in başarılı kayıtta publish edilmesi, email zaten alınmışsa publish edilmemesi)
+- [x] Gerçek altyapıya karşı uçtan uca doğrulama: gerçek Docker Postgres/RabbitMQ + çalışan Identity/Billing servisleriyle — gerçek bir kullanıcı `POST /auth/register` ile kaydedildi, `UserRegisteredEvent` gerçek RabbitMQ üzerinden Billing'e ulaştı, `GET /users/{userId}/plan` kullanıcıya otomatik atanmış Free planı (doğru `MaxTrackedProducts=3`, `CheckFrequencyMinutes=60`) döndürdü — sonrasında test verisi temizlendi
 
 ### Faz 4.2 — Store IAP Doğrulama + Webhook Entegrasyonu 🔜
 - [ ] Apple Developer Program hesabı + App Store Connect'te abonelik ürünü tanımlama; App Store Server API anahtarı (`.p8`, Key ID, Issuer ID)

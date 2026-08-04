@@ -17,6 +17,8 @@ STORE_REFERENCE_SERVICE_URL=[STORE_REFERENCE_SERVICE_URL]
 SUBSCRIPTION_DB_CONNECTION=Host=[Host];Port=[Port];Database=[Database];Username=[Username];Password=[Password]
 SUBSCRIPTION_SERVICE_URL=[SUBSCRIPTION_SERVICE_URL]
 
+BILLING_DB_CONNECTION=Host=[Host];Port=[Port];Database=[Database];Username=[Username];Password=[Password]
+
 IDENTITY_SERVICE_URL=[IDENTITY_SERVICE_URL]
 
 NOTIFICATION_DB_CONNECTION=Host=[Host];Port=[Port];Database=[Database];Username=[Username];Password=[Password]

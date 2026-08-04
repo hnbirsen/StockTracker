@@ -14,7 +14,7 @@ Sistem, **database-per-service** prensibiyle çalışan bağımsız mikroservisl
 | Store Reference Service | İl/ilçe → marka-spesifik mağaza ID eşleştirme | `store_db` | 5004 | ✅ Tamamlandı |
 | Search Orchestrator | Kullanıcı sorgusunu kuyruğa yönlendirme | — (Redis: throttle) | 5005 | ✅ Tamamlandı |
 | Subscription Service | Watch group, takip listesi, dedup | `subscription_db` | 5006 | ✅ Faz 3.1 tamamlandı |
-| Billing Service | Freemium plan yönetimi, App Store/Play Store IAP doğrulama + webhook | `billing_db` | 5007 | 🔜 Planlanıyor |
+| Billing Service | Freemium plan yönetimi, App Store/Play Store IAP doğrulama + webhook | `billing_db` | 5007 | ✅ Faz 4.1 tamamlandı (plan modeli); IAP doğrulama/webhook Faz 4.2'de |
 | Notification Service | Push (FCM) + e-posta bildirimleri | `notification_db` | 5008 | ✅ Faz 3.3 tamamlandı (gerçek Firebase/SendGrid hesabı hariç) |
 | Bershka Scraper | `CheckStockCommand` tüketir, `StockResultEvent` yayınlar | — (Redis: PDP cache-aside, kendi DB'si yok) | 5009 | ✅ Gerçek API entegre edildi (bkz. altta) |
 | API Gateway (YARP) | Dış trafik yönlendirme, JWT doğrulama, rate limiting | — | 8000 | ✅ Tamamlandı |
@@ -90,7 +90,7 @@ Başarılı eşleşmeler `ProductBrandMap` tablosuna yazılır → sonraki sorgu
 
 ### Mesajlaşma Katmanı (Faz 2.1 — Tamamlandı)
 
-- **Sözleşmeler**: `StockTracker.Shared.Contracts/Messages/V1/` altında `CheckStockCommand` ve `StockResultEvent` — namespace bazlı versiyonlama (`Messages.V1`). Breaking değişiklik gerektiğinde eski consumer'ları bozmadan `Messages.V2` namespace'i eklenir.
+- **Sözleşmeler**: `StockTracker.Shared.Contracts/Messages/V1/` altında `CheckStockCommand`, `StockResultEvent` ve (Faz 4.1) `UserRegisteredEvent` — namespace bazlı versiyonlama (`Messages.V1`). Breaking değişiklik gerektiğinde eski consumer'ları bozmadan `Messages.V2` namespace'i eklenir.
 - **Kuyruk isimlendirme**: `QueueNaming.StockCheckQueue(brandName)` → `stock.check.{brandName}` (küçük harf). Her markanın kendi izole kuyruğu vardır; bir markanın scraper'ı tıkandığında diğerleri etkilenmez.
 - **`CheckStockCommand`** marka-spesifik kuyruğa doğrudan **send** edilir (point-to-point — komutu sadece o markanın scraper'ı işler). **`StockResultEvent`** ise **publish** edilir (fanout — sonuca birden fazla dinleyici, örn. Notification Service ve Search Orchestrator, ilgi duyabilir).
 - **MassTransit vs ham RabbitMQ.Client kararı**: MassTransit seçildi — Polly'yle tutarlı retry/circuit-breaker middleware'i, connection/topology yönetimini soyutlaması, ve test edilebilirliği (`MassTransit.TestFramework`) nedeniyle. ⚠️ **MassTransit v9+ ticari lisans gerektiriyor** (bkz. `SetLicense`/`MT_LICENSE`); proje son açık kaynak (Apache 2.0) sürüm olan **8.5.5**'e sabitlendi (`StockTracker.Shared.Contracts.csproj`). Paket sürümü ileride yükseltilecekse önce lisans gereksinimi kontrol edilmeli.
@@ -261,7 +261,7 @@ Hepsi paylaşılan projeye taşındı/eklendi — Zara/Pull&Bear geldiğinde kop
 
 Not: bu önlemler istek nezaketi/güvenilirlik amaçlıdır (rate limiting, backoff, header gerçekçiliği) — CAPTCHA çözme veya bot-tespitini aktif olarak atlatma gibi teknikler kapsam dışıdır; `.claude/SECURITY.md`'de kabul edilen ToS riski bilinçli ve sınırlı tutulmalıdır.
 
-## Billing — App Store / Play Store In-App Purchase (Faz 4 — planlanıyor)
+## Billing — App Store / Play Store In-App Purchase
 
 **Karar**: ödeme, ayrı bir sanal pos/ödeme sağlayıcısı (iyzico, Paddle vb.) üzerinden değil, mobil uygulamanın (Faz 5.4) App Store ve Play Store'daki yerleşik abonelik satın alma (in-app purchase) akışı üzerinden alınacak. Billing Service kart bilgisiyle hiçbir zaman karşılaşmaz — yalnızca (1) mobil client'ın tamamladığı satın almayı Apple/Google'ın **server-to-server** API'lerine karşı doğrular, (2) abonelik yaşam döngüsü event'lerini (yenileme, iptal, ödeme başarısız, refund) her iki store'un kendi webhook mekanizmasından dinler.
 
@@ -277,6 +277,15 @@ Not: bu önlemler istek nezaketi/güvenilirlik amaçlıdır (rate limiting, back
 4. Abonelik sonrası tüm yaşam döngüsü event'leri (otomatik yenileme, iptal, ödeme başarısız, refund) client'tan bağımsız olarak **webhook** ile gelir: Apple → App Store Server Notifications V2 (JWS-signed payload, Apple public key'iyle doğrulanır), Google → Real-time Developer Notifications (Cloud Pub/Sub push subscription, OIDC token doğrulaması). Her ikisi de `PaymentEvents` tablosuna normalize edilerek yazılır, `(Provider, EventId)` unique constraint'iyle idempotent işlenir.
 
 **Sıralama bağımlılığı**: gerçek bir satın almanın uçtan uca (gerçek cihazda, gerçek Apple ID/Google hesabıyla) doğrulanması mobil client gerektiriyor — Faz 5.4 bu fazdan **sonra** geliyor. Faz 4'te doğrulama/webhook mantığı Apple/Google'ın sağladığı sandbox/örnek payload'larla test edilecek; "gerçek satın alma" testi Faz 5.4 tamamlandıktan sonra mümkün olacak. Bu, projenin genelindeki "canlı altyapıya karşı doğrula" prensibinden bilinçli, dokümante edilmiş bir sapma.
+
+### Plan Modeli (Faz 4.1 — Tamamlandı)
+
+- **`Plans`**: `Id`, `Name`, `MaxTrackedProducts`, `CheckFrequencyMinutes`, `AppStoreProductId`/`PlayStoreProductId` (nullable, gerçek store ürünü oluşturulana kadar `null`). Seed data: `Free` (3 ürün, 60 dk kontrol sıklığı) ve `Premium` (50 ürün, 5 dk) — sabit `Guid`'lerle (`BillingDbContext.FreePlanId`/`PremiumPlanId`), Subscription Service'in Faz 3.2 poller önceliklendirme kademeleriyle (yüksek/orta/düşük) tutarlı büyüklük mertebeleri seçildi (ileride bu iki sistem birbirine bağlanacaksa — ör. plan'a göre poller sıklığı — sayılar zaten aynı ölçekte).
+- **`UserPlans`**: kullanıcı başına tek satır (`UserId` unique) — güncel planı temsil eder, plan değişikliği (Faz 4.2/4.3) satırı günceller, yeni satır açmaz.
+- **Otomatik Free plan atama — event-driven, senkron değil**: Identity Service ile Billing Service arasında doğrudan bir HTTP bağımlılığı **kurulmadı** (kayıt sırasında Billing'e senkron çağrı yapılsaydı, Billing geçici olarak erişilemez olduğunda kullanıcı kaydı da başarısız olurdu — kabul edilemez bir bağımlılık). Bunun yerine: `AuthService.RegisterAsync`, kullanıcı oluşturulduktan **sonra** yeni bir mesaj (`Shared.Contracts.Messages.V1.UserRegisteredEvent` — `UserId`, `Email`, `RegisteredAt`) fanout olarak publish eder (fire-and-forget, `IPublishEndpoint.Publish`, kayıt akışını bloklamaz/başarısız etmez). Bunun için Identity Service'e ilk kez `AddStockTrackerRabbitMq` eklendi (yalnızca publish için, kendi consumer'ı yok). Billing Service, kendi bağımsız `billing-user-registered-events` kuyruğuyla bu event'i tüketip `UserPlanService.AssignFreePlanAsync` ile Free plan atar — idempotent (kullanıcının zaten bir planı varsa dokunmaz), MassTransit'in at-least-once teslimatıyla event iki kez gelse bile çift atama olmaz.
+- **`GET /plans`** (aktif planların listesi) ve **`GET /users/{userId}/plan`** (kullanıcının güncel planı, `Plan` detaylarıyla birlikte) — ikincisi Faz 4.3'teki `GET /billing/limits/{userId}` limit kontrolünün üzerine kurulacağı temel sorgu.
+- Unit testler: `tests/StockTracker.Billing.Tests` (Free plan atama, idempotent tekrar atama — mevcut planın ezilmemesi, aktif/pasif plan filtreleme, kullanıcı planı sorgulama var/yok senaryoları) ve `tests/StockTracker.Identity.Tests`'e eklenen 2 test (`UserRegisteredEvent`'in başarılı kayıtta doğru `UserId`/`Email` ile publish edilmesi; email zaten alınmışsa hiç publish edilmemesi).
+- Gerçek altyapıya karşı uçtan uca doğrulandı: gerçek Docker Postgres/RabbitMQ + çalışan Identity/Billing servisleriyle — gerçek bir `POST /auth/register` çağrısı sonrası `UserRegisteredEvent` gerçek RabbitMQ üzerinden Billing'e ulaştı, `GET /users/{userId}/plan` doğru Free plan detaylarını (`MaxTrackedProducts=3`, `CheckFrequencyMinutes=60`) döndürdü — sonrasında test verisi temizlendi.
 
 ## Bilinen Mimari Kararlar ve Riskler
 

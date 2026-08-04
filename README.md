@@ -67,7 +67,7 @@ flowchart LR
 | StockTracker.StoreReference | 5004 | City/district → brand-specific store ID mapping | ✅ Done |
 | StockTracker.SearchOrchestrator | 5005 | Routes user queries to scraper queues, throttling | ✅ Done |
 | StockTracker.Subscription | 5006 | Watch groups, tracking list, deduplication, Quartz-based stock poller | ✅ Done — watch group model (Faz 3.1) + stock poller (Faz 3.2); notifications still planned |
-| StockTracker.Billing | 5007 | Freemium plans, App Store/Play Store IAP verification + webhooks | 🔜 Planned |
+| StockTracker.Billing | 5007 | Freemium plans, App Store/Play Store IAP verification + webhooks | ✅ Done — plan model + auto Free-plan assignment (Faz 4.1); IAP verification/webhooks planned (Faz 4.2) |
 | StockTracker.Notification | 5008 | FCM push + email notifications | ✅ Done — restock detection, idempotency, real SendGrid integration wired (real Firebase/SendGrid credentials pending) |
 | StockTracker.BershkaScraper | 5009 | Consumes `CheckStockCommand`, publishes `StockResultEvent` | ✅ Done — real Bershka/Inditex API wired up |
 | StockTracker.Shared.Contracts | — | Shared DTOs, RabbitMQ message contracts (`CheckStockCommand`, `StockResultEvent`) and MassTransit setup | ✅ In use |
@@ -93,7 +93,8 @@ flowchart LR
 | Subscription Service (watch groups, dedup, `POST`/`GET`/`DELETE /watches`) | ✅ Done |
 | Stock Poller (Quartz.NET, watcher-count priority tiers, closes the loop via a `StockResultEvent` consumer) | ✅ Done |
 | Notification Service (restock detection, idempotent `StockResultEvent` consumer, real SendGrid email; FCM wired but unused pending device-token storage from Faz 5.4) | ✅ Done |
-| Billing Service (freemium + App Store/Play Store IAP, no separate payment gateway) | 🔜 Planned |
+| Billing Service — plan model + event-driven auto Free-plan assignment (`UserRegisteredEvent`) | ✅ Done |
+| Billing Service — App Store/Play Store IAP verification + webhooks (no separate payment gateway) | 🔜 Planned |
 | React Web frontend | 🔜 Planned |
 | React Native + Expo mobile app | 🔜 Planned |
 

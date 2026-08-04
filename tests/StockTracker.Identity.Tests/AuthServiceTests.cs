@@ -1,4 +1,5 @@
 using FluentAssertions;
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Moq;
@@ -6,6 +7,7 @@ using StockTracker.Identity.Data;
 using StockTracker.Identity.DTOs;
 using StockTracker.Identity.Entities;
 using StockTracker.Identity.Services;
+using StockTracker.Shared.Contracts.Messages.V1;
 
 namespace StockTracker.Identity.Tests;
 
@@ -31,8 +33,8 @@ public class AuthServiceTests
         return mock;
     }
 
-    private static AuthService CreateSut(IdentityDbContext db, Mock<ITokenService>? tokenService = null) =>
-        new(db, (tokenService ?? CreateTokenServiceMock()).Object, Mock.Of<IConfiguration>());
+    private static AuthService CreateSut(IdentityDbContext db, Mock<ITokenService>? tokenService = null, Mock<IPublishEndpoint>? publishEndpoint = null) =>
+        new(db, (tokenService ?? CreateTokenServiceMock()).Object, Mock.Of<IConfiguration>(), (publishEndpoint ?? new Mock<IPublishEndpoint>()).Object);
 
     [Fact]
     public async Task RegisterAsync_WhenEmailNotTaken_CreatesUserAndReturnsAuthResponse()
@@ -48,6 +50,36 @@ public class AuthServiceTests
         response.AccessToken.Should().Be("fake-access-token");
         (await db.Users.CountAsync()).Should().Be(1);
         (await db.RefreshTokens.CountAsync()).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WhenEmailNotTaken_PublishesUserRegisteredEvent()
+    {
+        await using var db = CreateDbContext();
+        var publishEndpoint = new Mock<IPublishEndpoint>();
+        var sut = CreateSut(db, publishEndpoint: publishEndpoint);
+        var request = new RegisterRequest("published@example.com", "password123", null, null);
+
+        var response = await sut.RegisterAsync(request);
+
+        publishEndpoint.Verify(p => p.Publish(
+            It.Is<UserRegisteredEvent>(e => e.UserId == response!.User.Id && e.Email == "published@example.com"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WhenEmailAlreadyTaken_DoesNotPublishEvent()
+    {
+        await using var db = CreateDbContext();
+        db.Users.Add(new User { Email = "taken@example.com", PasswordHash = "hash" });
+        await db.SaveChangesAsync();
+
+        var publishEndpoint = new Mock<IPublishEndpoint>();
+        var sut = CreateSut(db, publishEndpoint: publishEndpoint);
+
+        await sut.RegisterAsync(new RegisterRequest("taken@example.com", "password123", null, null));
+
+        publishEndpoint.Verify(p => p.Publish(It.IsAny<UserRegisteredEvent>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

@@ -1,7 +1,9 @@
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using StockTracker.Identity.Data;
 using StockTracker.Identity.DTOs;
 using StockTracker.Identity.Entities;
+using StockTracker.Shared.Contracts.Messages.V1;
 
 namespace StockTracker.Identity.Services;
 
@@ -19,12 +21,14 @@ public class AuthService : IAuthService
     private readonly IdentityDbContext _dbContext;
     private readonly ITokenService _tokenService;
     private readonly IConfiguration _configuration;
+    private readonly IPublishEndpoint _publishEndpoint;
 
-    public AuthService(IdentityDbContext dbContext, ITokenService tokenService, IConfiguration configuration)
+    public AuthService(IdentityDbContext dbContext, ITokenService tokenService, IConfiguration configuration, IPublishEndpoint publishEndpoint)
     {
         _dbContext = dbContext;
         _tokenService = tokenService;
         _configuration = configuration;
+        _publishEndpoint = publishEndpoint;
     }
 
     public async Task<AuthResponse?> RegisterAsync(RegisterRequest request)
@@ -47,6 +51,10 @@ public class AuthService : IAuthService
 
         _dbContext.Users.Add(user);
         await _dbContext.SaveChangesAsync();
+
+        // Fanout — Billing Service (Faz 4.1) bunu tüketip yeni kullanıcıya otomatik Free plan atar.
+        // Kayıt işlemini bloklamaması için fire-and-forget: publish başarısız olsa da kullanıcı kaydı geçerli kalır.
+        await _publishEndpoint.Publish(new UserRegisteredEvent(user.Id, user.Email, user.CreatedAt));
 
         return await GenerateAuthResponseAsync(user);
     }

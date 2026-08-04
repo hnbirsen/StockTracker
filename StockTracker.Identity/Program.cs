@@ -3,6 +3,7 @@ using StockTracker.Identity.Data;
 using StockTracker.Identity.Endpoints;
 using StockTracker.Identity.Services;
 using StockTracker.Shared.Contracts.Configuration;
+using StockTracker.Shared.Contracts.Messaging;
 
 EnvFileLoader.LoadFromNearestEnvFile();
 
@@ -24,6 +25,10 @@ var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
 // services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+
+// Faz 4.1 — kayıt sonrası UserRegisteredEvent publish edilir (Billing Service tüketir). Identity'nin
+// kendi consumer'ı yok, yalnızca publish eder.
+builder.Services.AddStockTrackerRabbitMq(builder.Configuration);
 
 var app = builder.Build();
 

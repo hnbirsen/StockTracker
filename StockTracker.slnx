@@ -20,4 +20,5 @@
   <Project Path="tests/StockTracker.Shared.Scraping.Tests/StockTracker.Shared.Scraping.Tests.csproj" />
   <Project Path="tests/StockTracker.Subscription.Tests/StockTracker.Subscription.Tests.csproj" />
   <Project Path="tests/StockTracker.Notification.Tests/StockTracker.Notification.Tests.csproj" />
+  <Project Path="tests/StockTracker.Billing.Tests/StockTracker.Billing.Tests.csproj" />
 </Solution>

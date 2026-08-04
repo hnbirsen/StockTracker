@@ -13,7 +13,7 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 | `brand_db` | Brand Detection Service | ✅ Migration uygulandı |
 | `store_db` | Store Reference Service | ✅ Migration uygulandı |
 | `subscription_db` | Subscription Service | ✅ Migration uygulandı |
-| `billing_db` | Billing Service | 🔜 Planlanıyor |
+| `billing_db` | Billing Service | ✅ Migration uygulandı (Faz 4.1 — plan modeli) |
 | `notification_db` | Notification Service | ✅ Migration uygulandı |
 
 ## Init Script Kuralları
@@ -39,6 +39,8 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 | `RefreshTokens` | Id, UserId, Token, ExpiresAt, IsRevoked, CreatedAt |
 
 `GET /internal/users/{id}` (Faz 3.3) — gateway bypass, direkt HTTP. Notification Service'in email çözmesi için.
+
+`UserRegisteredEvent` (Faz 4.1) — `POST /auth/register` başarılı olduğunda fanout olarak publish edilir (kayıt işlemini bloklamayan fire-and-forget). Billing Service tüketip otomatik Free plan atar.
 
 ### product_db
 
@@ -130,12 +132,22 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 
 `NotificationLogs(CommandId, UserId, Channel)` **unique** — idempotency guard'ı: aynı `StockResultEvent` iki kez tüketilse (MassTransit at-least-once) bile aynı kullanıcıya aynı kanaldan ikinci bir bildirim gitmez. `WatchGroupNotificationStates(ProductCode, Size, StoreId)` unique — Subscription Service'in `WatchGroups` tablosundan **bilerek bağımsız**: aynı `StockResultEvent`'i paralel tüketen iki servisten biri diğerine "önceki durum neydi" diye sorarsa yarış durumu oluşur, bu yüzden Notification kendi geçmişini kendi tutuyor (bkz. `.claude/ARCHITECTURE.md` → Notification Service).
 
-### billing_db (planlanan — App Store/Play Store IAP, bkz. `.claude/ARCHITECTURE.md` → Billing)
-- `Plans` (Id, Name, MaxTrackedProducts, CheckFrequencyMinutes, AppStoreProductId, PlayStoreProductId) — **`Price` yok**: fiyat App Store Connect/Play Console'da tanımlanır, DB yalnızca store ürün ID referanslarını tutar
+### billing_db (App Store/Play Store IAP, bkz. `.claude/ARCHITECTURE.md` → Billing)
+
+| Tablo | Alanlar |
+|---|---|
+| `Plans` | Id, Name, MaxTrackedProducts, CheckFrequencyMinutes, AppStoreProductId (nullable), PlayStoreProductId (nullable), IsActive, CreatedAt |
+| `UserPlans` | Id, UserId (unique), PlanId (FK, Restrict), AssignedAt |
+
+**`Price` yok**: fiyat App Store Connect/Play Console'da tanımlanır, DB yalnızca store ürün ID referanslarını tutar. **Seed data**: `Free` (`FreePlanId` sabit Guid, 3 ürün/60 dk) ve `Premium` (`PremiumPlanId` sabit Guid, 50 ürün/5 dk) — `AppStoreProductId`/`PlayStoreProductId` gerçek store ürünleri oluşturulana kadar `null`.
+
+**Otomatik Free plan atama (Faz 4.1)**: Identity Service, `POST /auth/register` başarılı olduğunda `UserRegisteredEvent`'i (fanout, `Messages.V1`) publish eder; Billing Service kendi bağımsız kuyruğuyla (`billing-user-registered-events`) tüketip `UserPlans`'a idempotent şekilde Free plan satırı ekler. `GET /plans` ve `GET /users/{userId}/plan` ile sorgulanabilir.
+
+**Planlanan (Faz 4.2)**:
 - `Subscriptions` (Id, UserId, PlanId, Platform (`Apple`/`Google`), Status, StoreTransactionId/PurchaseToken, CurrentPeriodEnd)
 - `PaymentEvents` (Id, SubscriptionId, Provider (`Apple`/`Google`), EventType, EventId, RawPayload, ReceivedAt) — `(Provider, EventId)` unique, webhook idempotency için
 
-> Planlanan şema taslaktır; Faz 4 başladığında ilgili servisin migration'ı ile netleştirilecektir.
+> Faz 4.2 şeması taslaktır; ilgili migration'la netleştirilecektir.
 
 ## Cross-Service Veri Referansları
 
