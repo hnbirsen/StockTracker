@@ -1,13 +1,11 @@
 using MassTransit;
-using Polly;
-using Polly.Extensions.Http;
 using StackExchange.Redis;
 using StockTracker.BershkaScraper.Consumers;
-using StockTracker.BershkaScraper.Http;
 using StockTracker.BershkaScraper.Services;
 using StockTracker.Shared.Contracts.Configuration;
 using StockTracker.Shared.Contracts.Messaging;
 using StockTracker.Shared.Scraping.Health;
+using StockTracker.Shared.Scraping.Http;
 
 EnvFileLoader.LoadFromNearestEnvFile();
 
@@ -40,17 +38,19 @@ builder.Services.AddSingleton<IScraperHealthLogService, ScraperHealthLogService>
 builder.Services.AddSingleton<IBershkaPdpFetcher, PlaywrightPdpFetcher>();
 
 builder.Services.AddTransient<ScraperEtiquetteHandler>();
+builder.Services.AddTransient(_ => new HostRateLimitingHandler(requestsPerMinute: 60));
 
-// Bershka'ya giden HTTP client aynı etiket/dayanıklılık politikalarından geçer — bkz. ScraperEtiquetteHandler
-// ve .claude/SECURITY.md.
+// Bershka'ya giden HTTP client aynı etiket/dayanıklılık/hız-sınırlama politikalarından geçer (Faz 2.6,
+// paylaşılan StockTracker.Shared.Scraping kütüphanesi — bkz. ScraperEtiquetteHandler, HostRateLimitingHandler,
+// ScraperResiliencePolicies üstündeki notlar ve .claude/SECURITY.md):
+//   1. HostRateLimitingHandler — host başına dakikada en fazla 60 istek (token bucket).
+//   2. ScraperEtiquetteHandler — gerçekçi, tutarlı header profili + istekler arası rastgele gecikme.
+//   3. AddScraperResilience — 429 (Retry-After'a uyarak) + 5xx retry; ayrıca 5xx için normal, 403
+//      (bot-tespiti sinyali) için daha agresif ayrı birer circuit breaker.
 IHttpClientBuilder ApplyResiliencePolicies(IHttpClientBuilder httpClientBuilder) => httpClientBuilder
+    .AddHttpMessageHandler<HostRateLimitingHandler>()
     .AddHttpMessageHandler<ScraperEtiquetteHandler>()
-    // Geçici (transient) HTTP hatalarında (5xx, timeout, network) 3 kez exponential backoff ile tekrar dener.
-    .AddTransientHttpErrorPolicy(policy => policy.WaitAndRetryAsync(
-        3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt))))
-    // Art arda 5 hata sonrası devreyi 30 saniye açar — Bershka geçici olarak engellediğinde bu servis
-    // yormadan bekler (her marka ayrı servis/kuyruk olduğu için diğer markaları etkilemez).
-    .AddTransientHttpErrorPolicy(policy => policy.CircuitBreakerAsync(5, TimeSpan.FromSeconds(30)));
+    .AddScraperResilience();
 
 ApplyResiliencePolicies(builder.Services.AddHttpClient<IBershkaStockApiClient, BershkaStockApiClient>(client =>
 {

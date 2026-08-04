@@ -71,7 +71,7 @@ flowchart LR
 | StockTracker.Notification | 5008 | FCM push + email notifications | 🔜 Planned |
 | StockTracker.BershkaScraper | 5009 | Consumes `CheckStockCommand`, publishes `StockResultEvent` | ✅ Done — real Bershka/Inditex API wired up |
 | StockTracker.Shared.Contracts | — | Shared DTOs, RabbitMQ message contracts (`CheckStockCommand`, `StockResultEvent`) and MassTransit setup | ✅ In use |
-| StockTracker.Shared.Scraping | — | Cross-scraper shared library — Redis-backed `IScraperHealthLogService` (success rate + HTTP status distribution per scraper, no per-scraper database) | ✅ In use |
+| StockTracker.Shared.Scraping | — | Cross-scraper shared library — Redis-backed `IScraperHealthLogService`, plus `Http/` (host-based token-bucket rate limiting, realistic rotating browser header profiles, Retry-After-aware retry + separate bot-detection circuit breaker) | ✅ In use |
 
 ## Implementation Status
 
@@ -88,7 +88,8 @@ flowchart LR
 | Store Reference Service (Bershka seed data) | ✅ Done |
 | Search Orchestrator + RabbitMQ integration | ✅ Done |
 | Bershka Scraper (consumer, Polly, UA rotation, real Bershka/Inditex stock + store-locator API, `StockResultEvent` publish) | ✅ Done |
-| Scraper Health Monitoring (`GET /health/scraper-stats`, Redis-backed, shared across future scrapers) | ✅ Done |
+| Scraper Health Monitoring (`GET /health/scraper-stats`, `GET /health/scraper-failures`, Redis-backed, shared across future scrapers) | ✅ Done |
+| Scraper scalability & bot-detection hardening (host rate limiting, 429/`Retry-After`, bot-detection circuit breaker, realistic header profiles) | ✅ Done — proxy/IP rotation deferred (needs a paid provider, see ROADMAP Faz 7) |
 | Subscription Service (watch groups) | 🔜 Planned |
 | Stock Poller (Quartz.NET/Hangfire) | 🔜 Planned |
 | Notification Service (FCM + email) | 🔜 Planned |
