@@ -8,6 +8,7 @@ namespace StockTracker.Billing.Services;
 public interface IUserPlanService
 {
     Task AssignFreePlanAsync(Guid userId);
+    Task SetPlanAsync(Guid userId, Guid planId);
     Task<List<PlanDto>> GetPlansAsync();
     Task<UserPlanDto?> GetUserPlanAsync(Guid userId);
 }
@@ -30,6 +31,29 @@ public class UserPlanService : IUserPlanService
             return;
 
         _db.UserPlans.Add(new UserPlan { UserId = userId, PlanId = BillingDbContext.FreePlanId });
+        await _db.SaveChangesAsync();
+    }
+
+    // Faz 4.2 — abonelik durumu değiştiğinde (aktif oldu → Premium, iptal/süresi doldu → Free) çağrılır.
+    // Kullanıcının zaten bir planı varsa günceller, yoksa oluşturur (ör. AssignFreePlanAsync'in henüz
+    // işlenmediği bir yarış durumunda bile güvenli).
+    public async Task SetPlanAsync(Guid userId, Guid planId)
+    {
+        var userPlan = await _db.UserPlans.FirstOrDefaultAsync(up => up.UserId == userId);
+        if (userPlan is null)
+        {
+            _db.UserPlans.Add(new UserPlan { UserId = userId, PlanId = planId });
+        }
+        else if (userPlan.PlanId != planId)
+        {
+            userPlan.PlanId = planId;
+            userPlan.AssignedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            return;
+        }
+
         await _db.SaveChangesAsync();
     }
 

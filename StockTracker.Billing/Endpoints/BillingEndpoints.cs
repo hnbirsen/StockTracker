@@ -1,3 +1,4 @@
+using StockTracker.Billing.DTOs;
 using StockTracker.Billing.Services;
 
 namespace StockTracker.Billing.Endpoints;
@@ -20,6 +21,48 @@ public static class BillingEndpoints
             return userPlan is not null ? Results.Ok(userPlan) : Results.NotFound();
         });
 
+        // POST /billing/verify-purchase — mobil client, App Store/Play Store'da tamamladığı satın almanın
+        // receipt/token'ını gönderir; ilgili store'un server-to-server API'sine karşı doğrulanır.
+        app.MapPost("/billing/verify-purchase", async (VerifyPurchaseRequest request, IPurchaseVerificationService service, CancellationToken ct) =>
+        {
+            if (request.UserId == Guid.Empty)
+                return Results.BadRequest("UserId boş olamaz.");
+            if (string.IsNullOrWhiteSpace(request.TransactionIdOrToken))
+                return Results.BadRequest("TransactionIdOrToken boş olamaz.");
+
+            var result = await service.VerifyAndRecordAsync(request, ct);
+            return result.Success
+                ? Results.Ok(result.Subscription)
+                : Results.Json(new { error = result.FailureReason }, statusCode: StatusCodes.Status422UnprocessableEntity);
+        });
+
+        // POST /billing/webhooks/apple — App Store Server Notifications V2. Güvenlik, isteğin kendisindeki
+        // JWS imzasından geliyor (bkz. AppleJwsVerifier) — ayrı bir paylaşılan secret/header yok.
+        app.MapPost("/billing/webhooks/apple", async (AppleWebhookRequest body, IAppleWebhookProcessor processor, CancellationToken ct) =>
+        {
+            var success = await processor.ProcessAsync(body.SignedPayload, ct);
+            return success ? Results.Ok() : Results.BadRequest();
+        });
+
+        // POST /billing/webhooks/google — Cloud Pub/Sub push. Güvenlik, Authorization header'ındaki
+        // Google-imzalı OIDC bearer token'dan geliyor (bkz. GoogleOidcTokenValidator).
+        app.MapPost("/billing/webhooks/google", async (HttpRequest httpRequest, IGoogleWebhookProcessor processor, CancellationToken ct) =>
+        {
+            using var reader = new StreamReader(httpRequest.Body);
+            var body = await reader.ReadToEndAsync(ct);
+            var bearerToken = httpRequest.Headers.Authorization.ToString().Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase);
+
+            var result = await processor.ProcessAsync(bearerToken, body, ct);
+            return result switch
+            {
+                GoogleWebhookResult.Unauthorized => Results.Unauthorized(),
+                GoogleWebhookResult.InvalidPayload => Results.BadRequest(),
+                _ => Results.Ok()
+            };
+        });
+
         app.MapGet("/health", () => Results.Ok("OK"));
     }
 }
+
+public record AppleWebhookRequest(string SignedPayload);

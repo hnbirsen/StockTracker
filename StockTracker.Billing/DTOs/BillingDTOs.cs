@@ -14,3 +14,21 @@ public record UserPlanDto(
     PlanDto Plan,
     DateTime AssignedAt
 );
+
+// platform: "Apple" | "Google". transactionIdOrToken: Apple için transactionId (App Store Server API
+// GET /inApps/v1/transactions/{id}'ye gönderilir), Google için purchaseToken.
+// subscriptionOrProductId: Google'da zorunlu (Play Developer API subscriptionId parametresi gerektirir),
+// Apple'da kullanılmaz (transactionId tek başına yeterli).
+public record VerifyPurchaseRequest(
+    Guid UserId,
+    string Platform,
+    string TransactionIdOrToken,
+    string? SubscriptionOrProductId
+);
+
+public record UserSubscriptionDto(
+    Guid UserId,
+    string Platform,
+    string Status,
+    DateTime? CurrentPeriodEnd
+);

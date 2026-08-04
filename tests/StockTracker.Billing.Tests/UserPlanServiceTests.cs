@@ -99,4 +99,48 @@ public class UserPlanServiceTests
 
         result.Should().BeNull();
     }
+
+    [Fact]
+    public async Task SetPlanAsync_WhenUserHasNoPlan_CreatesOne()
+    {
+        await using var db = CreateDbContext();
+        var sut = new UserPlanService(db);
+        var userId = Guid.NewGuid();
+
+        await sut.SetPlanAsync(userId, BillingDbContext.PremiumPlanId);
+
+        var userPlan = await db.UserPlans.FirstAsync(up => up.UserId == userId);
+        userPlan.PlanId.Should().Be(BillingDbContext.PremiumPlanId);
+    }
+
+    [Fact]
+    public async Task SetPlanAsync_WhenUserAlreadyOnDifferentPlan_UpdatesInPlace()
+    {
+        await using var db = CreateDbContext();
+        var userId = Guid.NewGuid();
+        db.UserPlans.Add(new UserPlan { UserId = userId, PlanId = BillingDbContext.FreePlanId });
+        await db.SaveChangesAsync();
+
+        var sut = new UserPlanService(db);
+        await sut.SetPlanAsync(userId, BillingDbContext.PremiumPlanId);
+
+        (await db.UserPlans.CountAsync(up => up.UserId == userId)).Should().Be(1);
+        var userPlan = await db.UserPlans.FirstAsync(up => up.UserId == userId);
+        userPlan.PlanId.Should().Be(BillingDbContext.PremiumPlanId);
+    }
+
+    [Fact]
+    public async Task SetPlanAsync_WhenUserAlreadyOnSamePlan_DoesNotThrowOrDuplicate()
+    {
+        await using var db = CreateDbContext();
+        var userId = Guid.NewGuid();
+        db.UserPlans.Add(new UserPlan { UserId = userId, PlanId = BillingDbContext.PremiumPlanId });
+        await db.SaveChangesAsync();
+
+        var sut = new UserPlanService(db);
+        var act = async () => await sut.SetPlanAsync(userId, BillingDbContext.PremiumPlanId);
+
+        await act.Should().NotThrowAsync();
+        (await db.UserPlans.CountAsync(up => up.UserId == userId)).Should().Be(1);
+    }
 }

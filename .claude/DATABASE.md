@@ -13,7 +13,7 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 | `brand_db` | Brand Detection Service | ✅ Migration uygulandı |
 | `store_db` | Store Reference Service | ✅ Migration uygulandı |
 | `subscription_db` | Subscription Service | ✅ Migration uygulandı |
-| `billing_db` | Billing Service | ✅ Migration uygulandı (Faz 4.1 — plan modeli) |
+| `billing_db` | Billing Service | ✅ Migration uygulandı (Faz 4.1 + 4.2) |
 | `notification_db` | Notification Service | ✅ Migration uygulandı |
 
 ## Init Script Kuralları
@@ -138,14 +138,14 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 |---|---|
 | `Plans` | Id, Name, MaxTrackedProducts, CheckFrequencyMinutes, AppStoreProductId (nullable), PlayStoreProductId (nullable), IsActive, CreatedAt |
 | `UserPlans` | Id, UserId (unique), PlanId (FK, Restrict), AssignedAt |
+| `UserSubscriptions` | Id, UserId (unique), PlanId, Platform (`Apple`/`Google`), StoreTransactionId (nullable, Apple), PurchaseToken (nullable, Google), Status (`Active`/`GracePeriod`/`Cancelled`/`Expired`/`Refunded`/`Unknown`), CurrentPeriodEnd (nullable), CreatedAt, UpdatedAt |
+| `PaymentEvents` | Id, SubscriptionId (nullable FK), Provider (`Apple`/`Google`), EventId, EventType, RawPayload, ReceivedAt |
 
 **`Price` yok**: fiyat App Store Connect/Play Console'da tanımlanır, DB yalnızca store ürün ID referanslarını tutar. **Seed data**: `Free` (`FreePlanId` sabit Guid, 3 ürün/60 dk) ve `Premium` (`PremiumPlanId` sabit Guid, 50 ürün/5 dk) — `AppStoreProductId`/`PlayStoreProductId` gerçek store ürünleri oluşturulana kadar `null`.
 
 **Otomatik Free plan atama (Faz 4.1)**: Identity Service, `POST /auth/register` başarılı olduğunda `UserRegisteredEvent`'i (fanout, `Messages.V1`) publish eder; Billing Service kendi bağımsız kuyruğuyla (`billing-user-registered-events`) tüketip `UserPlans`'a idempotent şekilde Free plan satırı ekler. `GET /plans` ve `GET /users/{userId}/plan` ile sorgulanabilir.
 
-**Planlanan (Faz 4.2)**:
-- `Subscriptions` (Id, UserId, PlanId, Platform (`Apple`/`Google`), Status, StoreTransactionId/PurchaseToken, CurrentPeriodEnd)
-- `PaymentEvents` (Id, SubscriptionId, Provider (`Apple`/`Google`), EventType, EventId, RawPayload, ReceivedAt) — `(Provider, EventId)` unique, webhook idempotency için
+**IAP doğrulama + webhook (Faz 4.2)**: `PaymentEvents(Provider, EventId)` unique — idempotency guard'ı, aynı Apple/Google webhook event'i iki kez teslim edilirse ikinci deneme buna çarpar. `UserSubscriptions(UserId)` unique — MVP kapsamında kullanıcı başına tek abonelik. `POST /billing/verify-purchase`, `POST /billing/webhooks/apple`, `POST /billing/webhooks/google` — detay ve gerçek altyapıya karşı uçtan uca doğrulama için bkz. `.claude/ARCHITECTURE.md` → Billing → Store IAP Doğrulama + Webhook.
 
 > Faz 4.2 şeması taslaktır; ilgili migration'la netleştirilecektir.
 
