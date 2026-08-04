@@ -1,5 +1,6 @@
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
+using StockTracker.Notification.Configuration;
 using StockTracker.Notification.Consumers;
 using StockTracker.Notification.Data;
 using StockTracker.Notification.Services;
@@ -22,17 +23,24 @@ var subscriptionServiceUrl = Environment.GetEnvironmentVariable("SUBSCRIPTION_SE
     ?? builder.Configuration["SubscriptionServiceUrl"]
     ?? throw new InvalidOperationException("SubscriptionServiceUrl bulunamadı.");
 
-// SendGrid/FCM — gerçek hesap/anahtar henüz yok (bkz. .claude/ARCHITECTURE.md — Notification Service).
-// Bilinçli olarak `throw` YOK: servis bu anahtarlar olmadan da ayağa kalkabilmeli, ilgili sender
-// çağrıldığında yapılandırılmamış olduğunu loglayıp gönderim yapmadan false döner.
-var sendGridApiKey = Environment.GetEnvironmentVariable("SENDGRID_API_KEY") ?? builder.Configuration["SendGrid:ApiKey"];
-var sendGridFromEmail = Environment.GetEnvironmentVariable("NOTIFICATION_FROM_EMAIL")
-    ?? builder.Configuration["SendGrid:FromEmail"]
-    ?? "notifications@stocktracker.local";
+// SMTP/FCM — gerçek sunucu/anahtar henüz yok (bkz. .claude/PENDING_INPUTS.md). Bilinçli olarak `throw`
+// YOK: servis bunlar olmadan da ayağa kalkabilmeli, ilgili sender çağrıldığında yapılandırılmamış
+// olduğunu loglayıp gönderim yapmadan false döner.
 var fcmServerKey = Environment.GetEnvironmentVariable("FCM_SERVER_KEY") ?? builder.Configuration["Fcm:ServerKey"];
 
 builder.Services.AddDbContext<NotificationDbContext>(options =>
     options.UseNpgsql(connectionString));
+
+builder.Services.Configure<SmtpSettings>(options =>
+{
+    options.Host = Environment.GetEnvironmentVariable("SMTP_HOST") ?? builder.Configuration["Smtp:Host"];
+    options.Port = int.TryParse(Environment.GetEnvironmentVariable("SMTP_PORT") ?? builder.Configuration["Smtp:Port"], out var port) ? port : 587;
+    options.Username = Environment.GetEnvironmentVariable("SMTP_USERNAME") ?? builder.Configuration["Smtp:Username"];
+    options.Password = Environment.GetEnvironmentVariable("SMTP_PASSWORD") ?? builder.Configuration["Smtp:Password"];
+    options.UseSsl = !bool.TryParse(Environment.GetEnvironmentVariable("SMTP_USE_SSL") ?? builder.Configuration["Smtp:UseSsl"], out var useSsl) || useSsl;
+    options.FromEmail = Environment.GetEnvironmentVariable("NOTIFICATION_FROM_EMAIL") ?? builder.Configuration["Smtp:FromEmail"] ?? "notifications@stocktracker.local";
+    options.FromName = Environment.GetEnvironmentVariable("NOTIFICATION_FROM_NAME") ?? builder.Configuration["Smtp:FromName"];
+});
 
 builder.Services.AddHttpClient<IIdentityServiceClient, IdentityServiceClient>(client =>
 {
@@ -44,18 +52,13 @@ builder.Services.AddHttpClient<ISubscriptionServiceClient, SubscriptionServiceCl
     client.BaseAddress = new Uri(subscriptionServiceUrl);
 });
 
-// SendGridEmailSender/FcmPushSender constructor'ları HttpClient dışında ham string parametreler de alıyor
-// (apiKey/serverKey/fromEmail) — AddHttpClient<TInterface, TImplementation> bunları DI'dan otomatik
-// çözemediği için (birden fazla `string` parametresi belirsizlik yaratır), adlandırılmış HttpClient'lar +
-// elle factory delegate ile inşa ediliyor.
-builder.Services.AddHttpClient("SendGridClient", client => client.BaseAddress = new Uri("https://api.sendgrid.com"));
+// FcmPushSender constructor'ı HttpClient dışında ham bir serverKey parametresi de alıyor —
+// AddHttpClient<TInterface, TImplementation> bunu DI'dan otomatik çözemediği için adlandırılmış bir
+// HttpClient + elle factory delegate ile inşa ediliyor. SmtpEmailSender'ın HttpClient'a ihtiyacı yok
+// (MailKit kendi TCP/SMTP bağlantısını kuruyor), bu yüzden normal DI ile kaydediliyor.
 builder.Services.AddHttpClient("FcmClient", client => client.BaseAddress = new Uri("https://fcm.googleapis.com"));
 
-builder.Services.AddScoped<IEmailSender>(sp => new SendGridEmailSender(
-    sp.GetRequiredService<IHttpClientFactory>().CreateClient("SendGridClient"),
-    sendGridApiKey,
-    sendGridFromEmail,
-    sp.GetRequiredService<ILogger<SendGridEmailSender>>()));
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 
 builder.Services.AddScoped<IPushSender>(sp => new FcmPushSender(
     sp.GetRequiredService<IHttpClientFactory>().CreateClient("FcmClient"),
