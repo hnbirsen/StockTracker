@@ -97,4 +97,45 @@ public class StoreReferenceServiceTests
 
         result.Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task GetStoreByIdAsync_WhenActiveStoreExists_ReturnsStore()
+    {
+        await using var db = CreateDbContext();
+        var store = CreateStore(Guid.NewGuid(), "Istanbul", "Kadikoy");
+        db.Stores.Add(store);
+        await db.SaveChangesAsync();
+
+        var sut = new StoreReferenceService(db);
+        var result = await sut.GetStoreByIdAsync(store.Id);
+
+        result.Should().NotBeNull();
+        result!.Id.Should().Be(store.Id);
+        result.BrandSpecificStoreId.Should().Be(store.BrandSpecificStoreId);
+    }
+
+    [Fact]
+    public async Task GetStoreByIdAsync_WhenStoreIsInactive_ReturnsNull()
+    {
+        await using var db = CreateDbContext();
+        var store = CreateStore(Guid.NewGuid(), "Istanbul", "Kadikoy", isActive: false);
+        db.Stores.Add(store);
+        await db.SaveChangesAsync();
+
+        var sut = new StoreReferenceService(db);
+        var result = await sut.GetStoreByIdAsync(store.Id);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetStoreByIdAsync_WhenIdDoesNotExist_ReturnsNull()
+    {
+        await using var db = CreateDbContext();
+        var sut = new StoreReferenceService(db);
+
+        var result = await sut.GetStoreByIdAsync(Guid.NewGuid());
+
+        result.Should().BeNull();
+    }
 }

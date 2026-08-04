@@ -7,6 +7,7 @@ namespace StockTracker.StoreReference.Services;
 public interface IStoreReferenceService
 {
     Task<List<StoreDto>> GetStoresAsync(Guid? brandId, string? city, string? district);
+    Task<StoreDto?> GetStoreByIdAsync(Guid id);
 }
 
 public class StoreReferenceService : IStoreReferenceService
@@ -34,5 +35,13 @@ public class StoreReferenceService : IStoreReferenceService
         return await query
             .Select(s => new StoreDto(s.Id, s.BrandId, s.BrandName, s.City, s.District, s.StoreName, s.BrandSpecificStoreId))
             .ToListAsync();
+    }
+
+    public async Task<StoreDto?> GetStoreByIdAsync(Guid id)
+    {
+        return await _db.Stores
+            .Where(s => s.Id == id && s.IsActive)
+            .Select(s => new StoreDto(s.Id, s.BrandId, s.BrandName, s.City, s.District, s.StoreName, s.BrandSpecificStoreId))
+            .FirstOrDefaultAsync();
     }
 }
