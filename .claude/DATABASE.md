@@ -93,12 +93,15 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 | Zara | `^\d{4}/\d{3}/\d{3}$` | High |
 | Pull&Bear | `^\d{8}$` | Low |
 | Mango | `^\d{8}/\d{2}$` | Medium |
+| H&M | `^\d{7}/\d{3}$` | Medium |
 
 > Bershka'nın pattern'i, gerçek bershka.com ürün sayfaları üzerinden doğrulandı (Faz 2.4): önde sıfır + 4 haneli model + 3 haneli varyant + 3 haneli renk kodu (ör. REF `2891/054/426` → `02891054426`), `BershkaStockApiClient`'ın stok API'sine gönderdiği `productCode` ile birebir aynı format. Eski `^\d{7,9}$` deseni doğrulanmamış bir tahmindi.
 >
 > Zara'nın pattern'i, gerçek zara.com ürün sayfaları üzerinden doğrulandı (Faz 6.1): 4 haneli `displayReference` + 3 haneli varyant + 3 haneli `colors[].id` (ör. `5063/821/802`), çoklu gerçek örnekle (9083/479, 5372/323, 0962/307, ...) doğrulandı. Eski `^\d{5}/\d{3}/\d{2,3}$` deseni doğrulanmamış bir tahmindi, ilk grup 5 değil 4 rakamdı.
 >
 > Mango'nun pattern'i, gerçek shop.mango.com API'sinden (`online-orchestrator.mango.com/v4/products` → `"reference":"37013869"`) ve ürün URL yapısından (`.../37013869/56/00`) doğrulandı: 8 haneli temel referans + 2 haneli `colors[].id`. **Medium** tutuldu (Zara/Bershka'nın High'ının aksine) — temel 8 haneli referans kesin doğrulandı ama fiziksel üründeki TAM görünen format (ayraç dahil) doğrulanamadı. Bilinçli olarak `/` ayraçlı bileşik kod seçildi — yalnızca `^\d{8}$` olsaydı Pull&Bear'ın (henüz doğrulanmamış) deseniyle birebir çakışırdı.
+>
+> H&M'nin pattern'i, gerçek www2.hm.com ürün sayfalarından (`__NEXT_DATA__` → `productId`/`artId`, ürün URL yapısı `productpage.{productId}{artId}.html`) doğrulandı: 7 haneli temel `productId` + 3 haneli `artId` (renk varyantı). **Medium** tutuldu (Zara/Bershka'nın High'ının aksine) — temel format canlı API/URL verisiyle doğrulandı ama fiziksel üründeki etiket formatı (ayraç dahil) henüz çapraz doğrulanmadı, Mango ile aynı gerekçe. `/` ayraçlı bileşik kod, diğer markaların regex'leriyle çakışmayı önlemek için bilinçli olarak seçildi (7+3 hane deseni Bershka'nın 11 haneli ayraçsız deseniyle veya Mango'nun 8+2 deseniyle çakışmıyor).
 
 ### store_db
 
@@ -106,7 +109,7 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 |---|---|
 | `Stores` | Id, BrandId, BrandName, City, District, StoreName, BrandSpecificStoreId, Latitude, Longitude, IsActive, CreatedAt |
 
-`BrandId`, `product_db.Brands.Id` ile eşleşen convention-based referans (FK değil). `BrandSpecificStoreId`, markanın kendi sitesi/API'sinde bu fiziksel mağazayı tanımlayan kod — scraper (Faz 2.4) bunu kullanacak. `Latitude`/`Longitude` (nullable) Faz 6.1'de Mango için eklendi — Mango'nun mağaza stok API'si mağaza ID'si değil enlem/boylam ile "yakındaki mağazalar" sorgusu yapıyor (bkz. `.claude/ARCHITECTURE.md` → Mango Scraper); Bershka/Zara'da her zaman `null`.
+`BrandId`, `product_db.Brands.Id` ile eşleşen convention-based referans (FK değil). `BrandSpecificStoreId`, markanın kendi sitesi/API'sinde bu fiziksel mağazayı tanımlayan kod — scraper (Faz 2.4) bunu kullanacak. `Latitude`/`Longitude` (nullable) Faz 6.1'de Mango için eklendi, H&M de aynı alanları kullanıyor — her ikisinin mağaza stok API'si mağaza ID'si değil enlem/boylam ile "yakındaki mağazalar" sorgusu yapıyor (bkz. `.claude/ARCHITECTURE.md` → Mango Scraper / H&M Scraper); Bershka/Zara'da her zaman `null`.
 
 **Seed data:** Bershka — 4 mağaza:
 
@@ -141,7 +144,18 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 
 > `BrandSpecificStoreId` ve koordinatlar, Mango'nun kendi `store-finder/v2/stores/stock` API'sinin döndürdüğü gerçek mağaza kayıtlarından (Faz 6.1) — bu API belirli bir mağaza ID'siyle değil enlem/boylam ile "yakındaki mağazalar" sorgusu yaptığı için, koordinatlar `productId`/`colorId` ile birlikte doğrudan sorguya geçiriliyor (bkz. `.claude/ARCHITECTURE.md` → Mango Scraper). Cevahir AVM ve Forum Bornova, Bershka/Zara'nın seçtiği AVM'lerle birebir aynı; Çankaya için Kentpark'ta Mango mağazası çıkmadığından en yakın gerçek eşleşme (CEPA AVM) kullanıldı.
 
-`GET /stores?brandId=&city=&district=` — tüm filtreler opsiyonel, `city`/`district` karşılaştırması case-insensitive, sadece `IsActive=true` kayıtlar döner. `GET /stores/{id}` (Faz 3.2) — tek mağaza, Subscription Service'in Stock Poller'ı `BrandSpecificStoreId` (ve Mango için `Latitude`/`Longitude`) çözmek için kullanır.
+**Seed data:** H&M — 4 mağaza + koordinat (Faz 6.1, Bershka/Zara/Mango'nun mevcut 4 iliyle eşleşecek şekilde):
+
+| Şehir | İlçe | Mağaza | BrandSpecificStoreId | Latitude | Longitude |
+|---|---|---|---|---|---|
+| Istanbul | Kadikoy | Bağdat Caddesi | `TR0030` | 40.96030285769096 | 29.08093315025326 |
+| Istanbul | Sisli | Özdilek Park AVM | `TR0028` | 41.07764537422764 | 29.01283722778317 |
+| Ankara | Cankaya | CEPA AVM | `TR0007` | 39.90859342561093 | 32.77851787102509 |
+| Izmir | Bornova | Optimum AVM | `TR0075` | 38.338445 | 27.135329 |
+
+> `BrandSpecificStoreId` (H&M'in kendi `storeCode` formatı, ör. `TR0030`) ve koordinatlar, H&M'in `/tr_tr/sis/tr/{productId}/{artId}` mağaza stok API'sinin döndürdüğü gerçek mağaza kayıtlarından (Faz 6.1) — Mango gibi bu API de belirli bir mağaza ID'siyle değil enlem/boylam ile "yakındaki mağazalar" sorgusu yapıyor (bkz. `.claude/ARCHITECTURE.md` → H&M Scraper). Kadıköy için Bağdat Caddesi'ndeki gerçek H&M mağazası kullanıldı; Şişli için Cevahir'de H&M çıkmadığından en yakın gerçek eşleşme (Özdilek Park AVM, Esentepe/Şişli); Çankaya için CEPA AVM (Mango'nunkiyle birebir aynı mağaza); Bornova için Forum Bornova'da H&M çıkmadığından en yakın gerçek eşleşme (İzmir Optimum AVM, gerçekte de Bornova ilçesinde).
+
+`GET /stores?brandId=&city=&district=` — tüm filtreler opsiyonel, `city`/`district` karşılaştırması case-insensitive, sadece `IsActive=true` kayıtlar döner. `GET /stores/{id}` (Faz 3.2) — tek mağaza, Subscription Service'in Stock Poller'ı `BrandSpecificStoreId` (ve Mango/H&M için `Latitude`/`Longitude`) çözmek için kullanır.
 
 ### subscription_db
 

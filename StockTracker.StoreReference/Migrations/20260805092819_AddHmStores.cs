@@ -1,0 +1,52 @@
+﻿using System;
+using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
+
+namespace StockTracker.StoreReference.Migrations
+{
+    /// <inheritdoc />
+    public partial class AddHmStores : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.InsertData(
+                table: "Stores",
+                columns: new[] { "Id", "BrandId", "BrandName", "BrandSpecificStoreId", "City", "CreatedAt", "District", "IsActive", "Latitude", "Longitude", "StoreName" },
+                values: new object[,]
+                {
+                    { new Guid("d4444444-0000-0000-0000-000000000001"), new Guid("e5f6a7b8-c9d0-1234-eabc-345678901234"), "H&M", "TR0030", "Istanbul", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Kadikoy", true, 40.960302857690962, 29.080933150253259, "Bağdat Caddesi" },
+                    { new Guid("d4444444-0000-0000-0000-000000000002"), new Guid("e5f6a7b8-c9d0-1234-eabc-345678901234"), "H&M", "TR0028", "Istanbul", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Sisli", true, 41.077645374227643, 29.012837227783169, "Özdilek Park AVM" },
+                    { new Guid("d4444444-0000-0000-0000-000000000003"), new Guid("e5f6a7b8-c9d0-1234-eabc-345678901234"), "H&M", "TR0007", "Ankara", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Cankaya", true, 39.908593425610931, 32.778517871025088, "CEPA AVM" },
+                    { new Guid("d4444444-0000-0000-0000-000000000004"), new Guid("e5f6a7b8-c9d0-1234-eabc-345678901234"), "H&M", "TR0075", "Izmir", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Bornova", true, 38.338445, 27.135328999999999, "Optimum AVM" }
+                });
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.DeleteData(
+                table: "Stores",
+                keyColumn: "Id",
+                keyValue: new Guid("d4444444-0000-0000-0000-000000000001"));
+
+            migrationBuilder.DeleteData(
+                table: "Stores",
+                keyColumn: "Id",
+                keyValue: new Guid("d4444444-0000-0000-0000-000000000002"));
+
+            migrationBuilder.DeleteData(
+                table: "Stores",
+                keyColumn: "Id",
+                keyValue: new Guid("d4444444-0000-0000-0000-000000000003"));
+
+            migrationBuilder.DeleteData(
+                table: "Stores",
+                keyColumn: "Id",
+                keyValue: new Guid("d4444444-0000-0000-0000-000000000004"));
+        }
+    }
+}

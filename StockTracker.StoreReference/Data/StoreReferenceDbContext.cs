@@ -42,9 +42,18 @@ public class StoreReferenceDbContext : DbContext
         // Bershka/Zara'nınkiyle birebir aynı AVM (Cevahir, Forum Bornova); Kadıköy için Bağdat Caddesi
         // üzerindeki gerçek Mango mağazası, Çankaya için CEPA AVM (Kentpark'ta Mango mağazası çıkmadı,
         // en yakın gerçek eşleşme CEPA).
+        // H&M mağaza listesi (Faz 6.1) — BrandSpecificStoreId, H&M'in kendi `/tr_tr/sis/tr/{productid}/
+        // {artid}` mağaza stok API'sinden dönen GERÇEK `storeCode` değerleri. Mango gibi bu API de belirli
+        // bir mağaza ID'siyle değil enlem/boylam ile "yakındaki mağazalar" araması yapıyor (bkz.
+        // Messages.V2.CheckStockCommand üstündeki not) — Latitude/Longitude dolduruldu. Kadıköy için Bağdat
+        // Caddesi üzerindeki gerçek H&M mağazası; Şişli için Cevahir'de H&M çıkmadı, en yakın gerçek eşleşme
+        // Özdilek Park AVM (Esentepe/Şişli); Çankaya için CEPA AVM (Mango'nunkiyle birebir aynı mağaza);
+        // Bornova için Forum Bornova'da H&M çıkmadı, en yakın gerçek eşleşme İzmir Optimum AVM (gerçekte de
+        // Bornova ilçesinde).
         var bershkaId = Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
         var zaraId = Guid.Parse("b2c3d4e5-f6a7-8901-bcde-f12345678901");
         var mangoId = Guid.Parse("d4e5f6a7-b8c9-0123-defa-234567890123");
+        var hmId = Guid.Parse("e5f6a7b8-c9d0-1234-eabc-345678901234");
         var seedCreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         modelBuilder.Entity<Store>().HasData(
@@ -197,6 +206,62 @@ public class StoreReferenceDbContext : DbContext
                 BrandSpecificStoreId = "10711",
                 Latitude = 38.450381582438,
                 Longitude = 27.209401193083,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d4444444-0000-0000-0000-000000000001"),
+                BrandId = hmId,
+                BrandName = "H&M",
+                City = "Istanbul",
+                District = "Kadikoy",
+                StoreName = "Bağdat Caddesi",
+                BrandSpecificStoreId = "TR0030",
+                Latitude = 40.96030285769096,
+                Longitude = 29.08093315025326,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d4444444-0000-0000-0000-000000000002"),
+                BrandId = hmId,
+                BrandName = "H&M",
+                City = "Istanbul",
+                District = "Sisli",
+                StoreName = "Özdilek Park AVM",
+                BrandSpecificStoreId = "TR0028",
+                Latitude = 41.07764537422764,
+                Longitude = 29.01283722778317,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d4444444-0000-0000-0000-000000000003"),
+                BrandId = hmId,
+                BrandName = "H&M",
+                City = "Ankara",
+                District = "Cankaya",
+                StoreName = "CEPA AVM",
+                BrandSpecificStoreId = "TR0007",
+                Latitude = 39.90859342561093,
+                Longitude = 32.77851787102509,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d4444444-0000-0000-0000-000000000004"),
+                BrandId = hmId,
+                BrandName = "H&M",
+                City = "Izmir",
+                District = "Bornova",
+                StoreName = "Optimum AVM",
+                BrandSpecificStoreId = "TR0075",
+                Latitude = 38.338445,
+                Longitude = 27.135329,
                 IsActive = true,
                 CreatedAt = seedCreatedAt
             }

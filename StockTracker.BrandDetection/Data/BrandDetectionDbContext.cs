@@ -36,10 +36,17 @@ public class BrandDetectionDbContext : DbContext
         // (bu yüzden Medium tutuldu, Zara/Bershka gibi High değil). Bilinçli olarak "/" ayraçlı bileşik
         // kod seçildi — yalnızca `^\d{8}$` olsaydı Pull&Bear'ın (henüz doğrulanmamış) `^\d{8}$` deseniyle
         // birebir çakışırdı.
+        // Seed: H&M — 7 haneli ürün kodu / 3 haneli renk kodu (ör. "1351887/001"). Faz 6.1'de
+        // www2.hm.com'un gerçek `/tr_tr/sis/tr/{productid}/{artid}` mağaza stok endpoint'inin URL
+        // yapısından VE PDP'nin `__NEXT_DATA__.props.pageProps.productPageProps.articleCode` alanının
+        // ("1351887001" = productid+artid birleşik) bölünmesinden doğrulandı — Mango'daki gibi temel
+        // format API üzerinden kesin ama fiziksel ürün etiketindeki TAM ayraçlı görünüm doğrulanamadı,
+        // bu yüzden Medium tutuldu.
         var bershkaId = Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
         var zaraId = Guid.Parse("b2c3d4e5-f6a7-8901-bcde-f12345678901");
         var pullbearId = Guid.Parse("c3d4e5f6-a7b8-9012-cdef-123456789012");
         var mangoId = Guid.Parse("d4e5f6a7-b8c9-0123-defa-234567890123");
+        var hmId = Guid.Parse("e5f6a7b8-c9d0-1234-eabc-345678901234");
 
         modelBuilder.Entity<BrandCodeSignature>().HasData(
             new BrandCodeSignature
@@ -82,6 +89,16 @@ public class BrandDetectionDbContext : DbContext
                 BrandId = mangoId,
                 BrandName = "Mango",
                 RegexPattern = @"^\d{8}/\d{2}$",
+                Confidence = ConfidenceLevel.Medium,
+                IsActive = true,
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            },
+            new BrandCodeSignature
+            {
+                Id = Guid.Parse("55555555-5555-5555-5555-555555555555"),
+                BrandId = hmId,
+                BrandName = "H&M",
+                RegexPattern = @"^\d{7}/\d{3}$",
                 Confidence = ConfidenceLevel.Medium,
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
