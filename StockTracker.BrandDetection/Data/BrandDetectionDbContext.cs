@@ -28,14 +28,12 @@ public class BrandDetectionDbContext : DbContext
         // Zara Scraper) — çoklu gerçek örnekle (9083/479, 5372/323, 0962/307, 6224/308, ...) doğrulandı.
         // Eski `^\d{5}/\d{3}/\d{2,3}$` deseni doğrulanmamış bir tahmindi, gerçek formatla uyuşmuyordu
         // (ilk grup 5 değil 4 rakam, renk kodu her zaman 3 rakam).
-        // Seed: Pull&Bear — 8 haneli sayısal
         // Seed: Mango — 8 haneli ürün referansı / 2 haneli renk kodu (ör. "37013869/56"). Faz 6.1'de
         // shop.mango.com'un gerçek `online-orchestrator.mango.com/v4/products` API'sinden ("reference":
         // "37013869") ve ürün sayfası URL yapısından (.../37013869/56/00) doğrulandı — 8 haneli temel
         // referans kesin, ama fiziksel ürün etiketindeki TAM görünen format (ayraç dahil) doğrulanamadı
         // (bu yüzden Medium tutuldu, Zara/Bershka gibi High değil). Bilinçli olarak "/" ayraçlı bileşik
-        // kod seçildi — yalnızca `^\d{8}$` olsaydı Pull&Bear'ın (henüz doğrulanmamış) `^\d{8}$` deseniyle
-        // birebir çakışırdı.
+        // kod seçildi.
         // Seed: H&M — 7 haneli ürün kodu / 3 haneli renk kodu (ör. "1351887/001"). Faz 6.1'de
         // www2.hm.com'un gerçek `/tr_tr/sis/tr/{productid}/{artid}` mağaza stok endpoint'inin URL
         // yapısından VE PDP'nin `__NEXT_DATA__.props.pageProps.productPageProps.articleCode` alanının
@@ -52,9 +50,18 @@ public class BrandDetectionDbContext : DbContext
         // `otherColorList`), tek bir productId zaten benzersiz. Faz 6.1'de gerçek
         // `sf-api/api/product/{id}/productsummary` API'sinden ve ürün URL yapısından (`p_{slug}_{id}`)
         // doğrulandı, birden fazla gerçek örnekle (1661415, 1884189, 2049912, 1652585, 1937139, ...) 7 haneli
-        // olduğu teyit edildi. **Medium** tutuldu — ayraçsız 7 haneli bir desen, henüz doğrulanmamış
-        // Pull&Bear'ın `^\d{8}$` deseniyle hane sayısı farkı sayesinde ÇAKIŞMIYOR ama tek bir marka örneği
-        // üzerinden genellendiği için High'a çıkarılmadı.
+        // olduğu teyit edildi. **Medium** tutuldu — ayraçsız 7 haneli bir desen diğer markaların ayraçlı
+        // desenleriyle ÇAKIŞMIYOR ama tek bir marka örneği üzerinden genellendiği için High'a çıkarılmadı.
+        // Seed: Pull&Bear — 8 haneli temel referans / 3 haneli renk kodu (ör. "07460338/250"). Faz 6.1'de
+        // pullandbear.com'un gerçek `<product-modular>` custom element'inin `__product.detail` verisinden
+        // (`reference: "07460338-I2026"`, `colors[].reference: "C07460338250-I2026"`) doğrulandı.
+        // ⚠️ **BİLİNÇLİ, BELGELENEN ÇAKIŞMA**: bu desen Massimo Dutti'ninkiyle (`^\d{8}/\d{3}$`) BİREBİR AYNI
+        // — iki marka aynı alt-yapıyı (aynı "MD Front" tarzı Inditex platformu) paylaştığı için. Saf regex
+        // tabanlı `BrandCodeSignature` eşleşmesi bu iki markayı codE formatından AYIRT EDEMEZ; bir kod her
+        // ikisiyle de eşleşecek ve BrandDetection Service'in "birden fazla aday → manuel çözüm" akışı
+        // (zaten var olan mekanizma) devreye girecek. Bu bir hata değil, gerçek bir platform-paylaşımı
+        // sonucu — bkz. `.claude/ARCHITECTURE.md` > Pull&Bear Scraper, `.claude/PENDING_INPUTS.md`. Medium
+        // tutuldu (fiziksel etiket formatı ayrıca doğrulanmadığı için, Massimo Dutti'yle aynı gerekçe).
         var bershkaId = Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
         var zaraId = Guid.Parse("b2c3d4e5-f6a7-8901-bcde-f12345678901");
         var pullbearId = Guid.Parse("c3d4e5f6-a7b8-9012-cdef-123456789012");
@@ -70,8 +77,8 @@ public class BrandDetectionDbContext : DbContext
                 BrandId = bershkaId,
                 BrandName = "Bershka",
                 RegexPattern = @"^\d{11}$",
-                // 11 haneli, önde sıfırlı format diğer markalarla çakışmıyor (Zara ayraçlı, Pull&Bear 8 haneli)
-                // — Medium'dan High'a çıkarıldı, gerçek site verisiyle doğrulandığı için.
+                // 11 haneli, önde sıfırlı, ayraçsız format diğer markalarla çakışmıyor (hepsi ayraçlı ya da
+                // farklı hane sayısında) — Medium'dan High'a çıkarıldı, gerçek site verisiyle doğrulandığı için.
                 Confidence = ConfidenceLevel.High,
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
@@ -91,10 +98,11 @@ public class BrandDetectionDbContext : DbContext
                 Id = Guid.Parse("33333333-3333-3333-3333-333333333333"),
                 BrandId = pullbearId,
                 BrandName = "Pull&Bear",
-                RegexPattern = @"^\d{8}$",
-                // Low tutuldu — Pull&Bear'ın gerçek kod formatı henüz bir ürün sayfası üzerinden doğrulanmadı
-                // (Bershka'nın artık 11 haneli olduğu doğrulandığı için önceki çakışma riski ortadan kalktı).
-                Confidence = ConfidenceLevel.Low,
+                RegexPattern = @"^\d{8}/\d{3}$",
+                // Faz 6.1'de gerçek pullandbear.com verisiyle doğrulandı (bkz. sınıf üstündeki yorum) —
+                // eski `^\d{8}$` (Low, tahminî) deseni gerçek formatla uyuşmuyordu. Massimo Dutti'yle
+                // BİLİNÇLİ OLARAK ÇAKIŞAN bir desen (aynı platform) — Medium tutuldu.
+                Confidence = ConfidenceLevel.Medium,
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             },

@@ -71,8 +71,18 @@ public class StoreReferenceDbContext : DbContext
         // Çankaya için iki seçenekten (Panora, Kavaklıdere) Panora seçildi; Bornova'da gerçek bir mağaza
         // çıkmadı, İzmir'deki en yakın gerçek eşleşme Hilltown İzmir (Karşıyaka) kullanıldı (Massimo
         // Dutti'nin Bornova için seçtiği mağazayla aynı gerekçe/mesafe mantığı).
+        // Pull&Bear mağaza listesi (Faz 6.1) — BrandSpecificStoreId, Massimo Dutti ile AYNI platformun
+        // mağaza bulucu API'sinden (`itxrest/2/bam/store/{storeId}/physical-store`, yalnızca mağaza keşfi
+        // için kullanıldı) dönen GERÇEK mağaza ID'leri. Gerçek stok sorgusu (`api/storefront/1/stores/.../
+        // products/.../available-sizes`) doğrudan bu ID ile çalışıyor, enlem/boylam çalışma zamanında
+        // GEREKMİYOR (Massimo Dutti/Zara'daki gibi). Kadıköy için Kozyatağı'ndaki City's AVM (Bershka'nın
+        // seçtiği mahalleyle aynı gerekçe); Şişli için Cevahir AVM (diğer markalarla birebir aynı mağaza);
+        // Çankaya için Kentpark AVM (Bershka/Zara/Massimo Dutti'yle birebir aynı mağaza); Bornova için Forum
+        // Bornova AVM — bu markada GERÇEK bir Bornova eşleşmesi bulundu (diğer markaların çoğunda en yakın
+        // eşleşmeye gidilmesi gerekmişti).
         var bershkaId = Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
         var zaraId = Guid.Parse("b2c3d4e5-f6a7-8901-bcde-f12345678901");
+        var pullBearId = Guid.Parse("c3d4e5f6-a7b8-9012-cdef-123456789012");
         var mangoId = Guid.Parse("d4e5f6a7-b8c9-0123-defa-234567890123");
         var hmId = Guid.Parse("e5f6a7b8-c9d0-1234-eabc-345678901234");
         var massimoDuttiId = Guid.Parse("f6a7b8c9-d0e1-2345-fabc-456789012345");
@@ -397,6 +407,62 @@ public class StoreReferenceDbContext : DbContext
                 BrandSpecificStoreId = "Beymen Hilltown İzmir",
                 Latitude = 38.478249,
                 Longitude = 27.073872,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d7777777-0000-0000-0000-000000000001"),
+                BrandId = pullBearId,
+                BrandName = "Pull&Bear",
+                City = "Istanbul",
+                District = "Kadikoy",
+                StoreName = "City's Kozyatağı AVM",
+                BrandSpecificStoreId = "16941",
+                Latitude = 40.9800391,
+                Longitude = 29.0993434,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d7777777-0000-0000-0000-000000000002"),
+                BrandId = pullBearId,
+                BrandName = "Pull&Bear",
+                City = "Istanbul",
+                District = "Sisli",
+                StoreName = "Cevahir AVM",
+                BrandSpecificStoreId = "5287",
+                Latitude = 41.063595,
+                Longitude = 28.992115,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d7777777-0000-0000-0000-000000000003"),
+                BrandId = pullBearId,
+                BrandName = "Pull&Bear",
+                City = "Ankara",
+                District = "Cankaya",
+                StoreName = "Kentpark AVM",
+                BrandSpecificStoreId = "6370",
+                Latitude = 39.909011,
+                Longitude = 32.77629,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d7777777-0000-0000-0000-000000000004"),
+                BrandId = pullBearId,
+                BrandName = "Pull&Bear",
+                City = "Izmir",
+                District = "Bornova",
+                StoreName = "Forum Bornova AVM",
+                BrandSpecificStoreId = "5334",
+                Latitude = 38.45034027,
+                Longitude = 27.2086791,
                 IsActive = true,
                 CreatedAt = seedCreatedAt
             }
