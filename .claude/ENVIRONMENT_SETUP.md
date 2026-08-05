@@ -76,13 +76,20 @@ BERSHKA_STOCK_API_BASE_URL=https://api.inditex.com
 # mağaza stoğu doğrudan www2.hm.com'a karşı Playwright ile okunuyor (bkz. .claude/ARCHITECTURE.md >
 # H&M Scraper). REDIS_CONNECTION ve yukarıdaki paylaşılan RabbitMQ değişkenleri zaten yeterli.
 # Playwright/Chrome kurulumu GEREKİYOR — aşağıdaki bölüme bkz.
+
+# Massimo Dutti Scraper — ek bir env var GEREKMİYOR. Hibrit bir mimari: online stok Playwright ile
+# www.massimodutti.com'a karşı okunuyor (Akamai korumalı), mağaza stoğu ise AYNI domain'deki ama
+# korumasız itxrest/2/bam/store/.../physical-store API'sine düz bir HttpClient ile gidiyor (bkz.
+# .claude/ARCHITECTURE.md > Massimo Dutti Scraper). REDIS_CONNECTION ve yukarıdaki paylaşılan RabbitMQ
+# değişkenleri zaten yeterli. Playwright/Chrome kurulumu GEREKİYOR (yalnızca online stok için) —
+# aşağıdaki bölüme bkz.
 ```
 
 `.env` dosyası `.gitignore`'da olmalı — repoya commit'lenmez. Sadece `.env example` (değersiz, key listesi) repoda tutulur.
 
-## Bershka/Zara/H&M Scraper — Playwright/Chrome Kurulumu (tek seferlik, manuel adım)
+## Bershka/Zara/H&M/Massimo Dutti Scraper — Playwright/Chrome Kurulumu (tek seferlik, manuel adım)
 
-`StockTracker.BershkaScraper`, `StockTracker.ZaraScraper` ve `StockTracker.HmScraper`, ürün sayfalarını (üçü de Akamai Bot Manager'ın arkasında — Zara'da `store-product-availability`, H&M'de `/sis/tr/...` mağaza-stok endpoint'i de aynı korumaya sahip, bkz. `.claude/ARCHITECTURE.md` > Zara Scraper / H&M Scraper) Playwright ile **gerçek Chrome kanalını** çalıştırarak okur. Bu, `.NET` paket restore'unun (`dotnet restore`) **kapsamadığı** ayrı bir adım — NuGet paketi sadece Playwright'ın .NET API'sini indirir, tarayıcı binary'sini indirmez. Kurulum makine/tarayıcı-cache seviyesinde olduğu için (aşağıya bkz.) üç servis için ayrı ayrı yapmaya gerek yok — biri için kurulduktan sonra diğerleri de aynı önbellekten kullanır; yine de her projeyi en az bir kez build etmek gerekir (`playwright.ps1`/`cli.js` script'i `bin/` altına oradan düşer).
+`StockTracker.BershkaScraper`, `StockTracker.ZaraScraper`, `StockTracker.HmScraper` ve `StockTracker.MassimoDuttiScraper`, ürün sayfalarını (dördü de Akamai Bot Manager'ın arkasında — Zara'da `store-product-availability`, H&M'de `/sis/tr/...` mağaza-stok endpoint'i de aynı korumaya sahip; Massimo Dutti'de yalnızca ürün sayfası/online stok API'si korumalı, mağaza stoğu AYRI ve korumasız bir API'ye gidiyor, bkz. `.claude/ARCHITECTURE.md` > Zara Scraper / H&M Scraper / Massimo Dutti Scraper) Playwright ile **gerçek Chrome kanalını** çalıştırarak okur. Bu, `.NET` paket restore'unun (`dotnet restore`) **kapsamadığı** ayrı bir adım — NuGet paketi sadece Playwright'ın .NET API'sini indirir, tarayıcı binary'sini indirmez. Kurulum makine/tarayıcı-cache seviyesinde olduğu için (aşağıya bkz.) dört servis için ayrı ayrı yapmaya gerek yok — biri için kurulduktan sonra diğerleri de aynı önbellekten kullanır; yine de her projeyi en az bir kez build etmek gerekir (`playwright.ps1`/`cli.js` script'i `bin/` altına oradan düşer).
 
 **Neden `chrome` kanalı, bundled `chromium` değil:** gerçek verilerle doğrulandı — Playwright'ın varsayılan (bundled) Chromium'u, standart stealth önlemlerine (UA maskeleme, `navigator.webdriver` gizleme) rağmen Akamai'den anında "Access Denied" alıyor. Gerçek Chrome kanalını sürmek bu engeli aşıyor (bkz. `.claude/ARCHITECTURE.md` > Bershka Scraper > Playwright + Redis cache-aside). Bu yüzden `chromium` değil `chrome` kurulmalı.
 
@@ -123,6 +130,7 @@ dotnet run --project StockTracker.BershkaScraper   # :5009
 dotnet run --project StockTracker.ZaraScraper      # :5010
 dotnet run --project StockTracker.MangoScraper     # :5011 (Playwright/Chrome kurulumu gerekmez)
 dotnet run --project StockTracker.HmScraper        # :5012 (Playwright/Chrome kurulumu gerekir)
+dotnet run --project StockTracker.MassimoDuttiScraper # :5013 (Playwright/Chrome kurulumu gerekir — yalnızca online stok için)
 ```
 
 Sadece belirli bir servis üzerinde çalışıyorsan, altyapıyı ayağa kaldırıp o servisi IDE'den debug edebilirsin:

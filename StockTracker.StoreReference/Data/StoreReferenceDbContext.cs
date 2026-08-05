@@ -50,10 +50,23 @@ public class StoreReferenceDbContext : DbContext
         // Özdilek Park AVM (Esentepe/Şişli); Çankaya için CEPA AVM (Mango'nunkiyle birebir aynı mağaza);
         // Bornova için Forum Bornova'da H&M çıkmadı, en yakın gerçek eşleşme İzmir Optimum AVM (gerçekte de
         // Bornova ilçesinde).
+        // Massimo Dutti mağaza listesi (Faz 6.1) — BrandSpecificStoreId, Massimo Dutti'nin kendi
+        // `itxrest/2/bam/store/{storeId}/physical-store` mağaza BULUCU API'sinden (yalnızca mağaza keşfi için
+        // kullanıldı, enlem/boylam ile "yakındaki mağazalar" araması yapıyor) dönen GERÇEK mağaza ID'leri
+        // (ör. "4483" = CEVAHIR). Latitude/Longitude yalnızca bu keşif amacıyla dolduruldu — gerçek mağaza
+        // stok sorgusu (`api/storefront/1/stores/.../products/.../available-sizes`) çalışma zamanında bu
+        // koordinatlara İHTİYAÇ DUYMUYOR, doğrudan BrandSpecificStoreId ile çalışıyor (Zara'daki gibi, bkz.
+        // .claude/ARCHITECTURE.md > Massimo Dutti Scraper). Şişli için Cevahir AVM (Bershka/Zara/H&M'inkiyle
+        // birebir aynı mağaza); Çankaya için Kentpark AVM (Bershka/Zara'nınkiyle birebir aynı mağaza);
+        // Kadıköy'de gerçek bir Massimo Dutti mağazası çıkmadı, Anadolu yakasındaki en yakın gerçek eşleşme
+        // Hilltown AVM (Maltepe) kullanıldı; Bornova'da da gerçek bir mağaza çıkmadı, İzmir'deki en yakın
+        // gerçek eşleşme Karşıyaka Rönesans AVM kullanıldı. Mağaza bazlı stok sorgusu gerçek sayısal verilerle
+        // canlı doğrulandı.
         var bershkaId = Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
         var zaraId = Guid.Parse("b2c3d4e5-f6a7-8901-bcde-f12345678901");
         var mangoId = Guid.Parse("d4e5f6a7-b8c9-0123-defa-234567890123");
         var hmId = Guid.Parse("e5f6a7b8-c9d0-1234-eabc-345678901234");
+        var massimoDuttiId = Guid.Parse("f6a7b8c9-d0e1-2345-fabc-456789012345");
         var seedCreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         modelBuilder.Entity<Store>().HasData(
@@ -262,6 +275,62 @@ public class StoreReferenceDbContext : DbContext
                 BrandSpecificStoreId = "TR0075",
                 Latitude = 38.338445,
                 Longitude = 27.135329,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d5555555-0000-0000-0000-000000000001"),
+                BrandId = massimoDuttiId,
+                BrandName = "Massimo Dutti",
+                City = "Istanbul",
+                District = "Kadikoy",
+                StoreName = "Hilltown AVM",
+                BrandSpecificStoreId = "12013",
+                Latitude = 40.953106,
+                Longitude = 29.121725,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d5555555-0000-0000-0000-000000000002"),
+                BrandId = massimoDuttiId,
+                BrandName = "Massimo Dutti",
+                City = "Istanbul",
+                District = "Sisli",
+                StoreName = "Cevahir AVM",
+                BrandSpecificStoreId = "4483",
+                Latitude = 41.063595,
+                Longitude = 28.992115,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d5555555-0000-0000-0000-000000000003"),
+                BrandId = massimoDuttiId,
+                BrandName = "Massimo Dutti",
+                City = "Ankara",
+                District = "Cankaya",
+                StoreName = "Kentpark AVM",
+                BrandSpecificStoreId = "4009",
+                Latitude = 39.909011,
+                Longitude = 32.77629,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d5555555-0000-0000-0000-000000000004"),
+                BrandId = massimoDuttiId,
+                BrandName = "Massimo Dutti",
+                City = "Izmir",
+                District = "Bornova",
+                StoreName = "Karşıyaka Rönesans AVM",
+                BrandSpecificStoreId = "12840",
+                Latitude = 38.4784351,
+                Longitude = 27.0743432,
                 IsActive = true,
                 CreatedAt = seedCreatedAt
             }
