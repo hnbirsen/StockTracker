@@ -52,7 +52,7 @@ public class MangoStockApiClientTests
 
         var result = await sut.CheckOnlineStockAsync("37013869/56", "S", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
         pdpFetcher.Verify(f => f.FetchProductDataJsonAsync(ProductUrl, It.IsAny<CancellationToken>()), Times.Once);
         redisDb.Invocations.Count(i => i.Method.Name == nameof(IDatabaseAsync.StringSetAsync)).Should().Be(1);
     }
@@ -65,7 +65,7 @@ public class MangoStockApiClientTests
 
         var result = await sut.CheckOnlineStockAsync("37013869/56", "M", ProductUrl, CancellationToken.None);
 
-        result.Should().BeFalse();
+        result!.InStock.Should().BeFalse();
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public class MangoStockApiClientTests
 
         var result = await sut.CheckOnlineStockAsync("37013869/56", "s", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public class MangoStockApiClientTests
 
         var result = await sut.CheckOnlineStockAsync("37013869/56", "S", ProductUrl, CancellationToken.None);
 
-        result.Should().BeFalse();
+        result!.InStock.Should().BeFalse();
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public class MangoStockApiClientTests
 
         var result = await sut.CheckOnlineStockAsync("37013869/56", "S", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
         pdpFetcher.Verify(f => f.FetchProductDataJsonAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -142,12 +142,27 @@ public class MangoStockApiClientTests
 
         var result = await sut.CheckStoreStockAsync("37013869/56", "S", "10389", 40.96, 29.08, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
         var requestedUri = handler.RequestedUris.Should().ContainSingle().Subject;
         requestedUri.Should().Contain("colorId=56");
         requestedUri.Should().Contain("productId=37013869");
         requestedUri.Should().Contain("latitude=40.96");
         requestedUri.Should().Contain("longitude=29.08");
+    }
+
+    [Fact]
+    public async Task CheckStoreStockAsync_WhenApiReturnsIsLastUnitFlag_PropagatesItAndQuantityStaysNull()
+    {
+        // Faz 6.1 — kullanıcı talebiyle eklendi: Mango sayısal miktar vermiyor ama `sizesIds[].isLastUnit`
+        // adında doğrudan bir bayrak veriyor (canlı doğrulandı) — Quantity her zaman null kalmalı.
+        var storeJson = """{"stores":[{"id":"10389","sizes":["S"],"sizesIds":[{"id":"20","name":"S","isLastUnit":true}]}]}""";
+        var (sut, _, _, _) = CreateSut(storeResponder: _ => FakeHttpResponses.Json(HttpStatusCode.OK, storeJson));
+
+        var result = await sut.CheckStoreStockAsync("37013869/56", "S", "10389", 40.96, 29.08, CancellationToken.None);
+
+        result!.InStock.Should().BeTrue();
+        result.Quantity.Should().BeNull();
+        result.IsLastUnit.Should().BeTrue();
     }
 
     [Fact]
@@ -158,7 +173,7 @@ public class MangoStockApiClientTests
 
         var result = await sut.CheckStoreStockAsync("37013869/56", "S", "10389", 40.96, 29.08, CancellationToken.None);
 
-        result.Should().BeFalse();
+        result!.InStock.Should().BeFalse();
     }
 
     [Fact]
@@ -172,7 +187,7 @@ public class MangoStockApiClientTests
 
         var result = await sut.CheckStoreStockAsync("37013869/56", "S", "10389", 40.96, 29.08, CancellationToken.None);
 
-        result.Should().BeFalse();
+        result!.InStock.Should().BeFalse();
     }
 
     [Fact]
@@ -183,7 +198,7 @@ public class MangoStockApiClientTests
 
         var result = await sut.CheckStoreStockAsync("37013869/56", "s", "10389", 40.96, 29.08, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
     }
 
     [Fact]

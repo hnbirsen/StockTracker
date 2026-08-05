@@ -108,5 +108,34 @@ public class MangoPdpFetcherTests
         entries.Should().ContainSingle(e => e.ColorId == "10" && e.Name == "M" && e.Available);
     }
 
+    [Fact]
+    public async Task FetchProductDataJsonAsync_HandlesLastUnitsAsRealBooleanAndAsUndefinedString()
+    {
+        // Faz 6.1 — canlı veriyle doğrulandı: "lastUnits" alanı çoğunlukla gerçek bir bool (`true`/`false`)
+        // ama React Flight (Next.js RSC) serileştirmesi JS `undefined`'ı `"$undefined"` LİTERAL STRING'İ
+        // olarak kodluyor — düz bir `bool?` bunu deserialize ederken JsonException fırlatır, bu yüzden
+        // özel bir converter var (bkz. MangoPdpFetcher.NullableBoolOrUndefinedConverter). Her iki durum da
+        // aynı yanıtta karışık şekilde gelebiliyor, ikisi de sorunsuz işlenmeli.
+        var colors = """
+            [{"id":"77","label":"Test","sizes":[
+              {"id":"19","label":"XS","available":true,"lastUnits":true},
+              {"id":"20","label":"S","available":true,"lastUnits":false},
+              {"id":"21","label":"M","available":true,"lastUnits":"$undefined"}
+            ]}]
+            """;
+        var html = BuildPageHtml(colors);
+        var (sut, _) = CreateSut(HttpStatusCode.OK, html);
+
+        var json = await sut.FetchProductDataJsonAsync("https://shop.mango.com/tr/tr/p/test/37013869/77/00", CancellationToken.None);
+
+        json.Should().NotBeNull();
+        var entries = JsonSerializer.Deserialize<List<TestSizeEntryWithLastUnits>>(json!, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        entries.Should().ContainSingle(e => e.Name == "XS").Which.LastUnits.Should().BeTrue();
+        entries.Should().ContainSingle(e => e.Name == "S").Which.LastUnits.Should().BeFalse();
+        entries.Should().ContainSingle(e => e.Name == "M").Which.LastUnits.Should().BeNull();
+    }
+
     private record TestSizeEntry(string Name, bool Available, string ColorId);
+
+    private record TestSizeEntryWithLastUnits(string Name, bool Available, string ColorId, bool? LastUnits);
 }

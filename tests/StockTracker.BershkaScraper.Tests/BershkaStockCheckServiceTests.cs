@@ -49,7 +49,7 @@ public class BershkaStockCheckServiceTests
     {
         var command = OnlineCommand();
         _apiClient.Setup(c => c.CheckOnlineStockAsync(command.ProductCode, command.Size, ProductUrl, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .ReturnsAsync(new StockCheckResult(true, null, null));
 
         var sut = CreateSut();
         var result = await sut.CheckAsync(command, CancellationToken.None);
@@ -67,7 +67,7 @@ public class BershkaStockCheckServiceTests
         var storeId = Guid.NewGuid();
         var command = StoreCommand(storeId);
         _apiClient.Setup(c => c.CheckStoreStockAsync(command.ProductCode, command.Size, "16884", ProductUrl, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .ReturnsAsync(new StockCheckResult(false, 0, null));
 
         var sut = CreateSut();
         var result = await sut.CheckAsync(command, CancellationToken.None);
@@ -80,16 +80,52 @@ public class BershkaStockCheckServiceTests
     }
 
     [Fact]
+    public async Task CheckAsync_WhenStoreCheckReturnsQuantityAndLastUnit_PropagatesToStockResultEvent()
+    {
+        // Faz 6.1 — kullanıcı talebiyle eklendi: mağaza sorgusundan gelen gerçek miktar/son-ürün bilgisi
+        // StockResultEvent'e taşınmalı, kaybolmamalı.
+        var storeId = Guid.NewGuid();
+        var command = StoreCommand(storeId);
+        _apiClient.Setup(c => c.CheckStoreStockAsync(command.ProductCode, command.Size, "16884", ProductUrl, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new StockCheckResult(true, 1, true));
+
+        var sut = CreateSut();
+        var result = await sut.CheckAsync(command, CancellationToken.None);
+
+        result.Status.Should().Be(StockStatus.InStock);
+        result.Quantity.Should().Be(1);
+        result.IsLastUnit.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CheckAsync_WhenOnlineCheckSucceeds_QuantityAndIsLastUnitAreNull()
+    {
+        // Online kontrolde Bershka'nın API'si sayısal miktar vermiyor (bkz. BershkaStockApiClient) —
+        // Quantity/IsLastUnit her zaman null olmalı, false/0 değil.
+        var command = OnlineCommand();
+        _apiClient.Setup(c => c.CheckOnlineStockAsync(command.ProductCode, command.Size, ProductUrl, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new StockCheckResult(true, null, null));
+
+        var sut = CreateSut();
+        var result = await sut.CheckAsync(command, CancellationToken.None);
+
+        result.Quantity.Should().BeNull();
+        result.IsLastUnit.Should().BeNull();
+    }
+
+    [Fact]
     public async Task CheckAsync_WhenApiReturnsNull_MapsToUnknownStatus()
     {
         var command = OnlineCommand();
         _apiClient.Setup(c => c.CheckOnlineStockAsync(command.ProductCode, command.Size, ProductUrl, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((bool?)null);
+            .ReturnsAsync((StockCheckResult?)null);
 
         var sut = CreateSut();
         var result = await sut.CheckAsync(command, CancellationToken.None);
 
         result.Status.Should().Be(StockStatus.Unknown);
+        result.Quantity.Should().BeNull();
+        result.IsLastUnit.Should().BeNull();
     }
 
     [Fact]
@@ -114,7 +150,7 @@ public class BershkaStockCheckServiceTests
     {
         var command = StoreCommand(Guid.NewGuid()) with { BrandSpecificStoreId = null };
         _apiClient.Setup(c => c.CheckOnlineStockAsync(command.ProductCode, command.Size, ProductUrl, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .ReturnsAsync(new StockCheckResult(true, null, null));
 
         var sut = CreateSut();
         var result = await sut.CheckAsync(command, CancellationToken.None);

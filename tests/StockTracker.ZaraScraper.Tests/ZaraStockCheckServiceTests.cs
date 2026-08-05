@@ -49,7 +49,7 @@ public class ZaraStockCheckServiceTests
     {
         var command = OnlineCommand();
         _apiClient.Setup(c => c.CheckOnlineStockAsync(command.ProductCode, command.Size, ProductUrl, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .ReturnsAsync(new StockCheckResult(true, null, null));
 
         var sut = CreateSut();
         var result = await sut.CheckAsync(command, CancellationToken.None);
@@ -67,7 +67,7 @@ public class ZaraStockCheckServiceTests
         var storeId = Guid.NewGuid();
         var command = StoreCommand(storeId);
         _apiClient.Setup(c => c.CheckStoreStockAsync(command.ProductCode, command.Size, "1236", ProductUrl, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .ReturnsAsync(new StockCheckResult(false, null, null));
 
         var sut = CreateSut();
         var result = await sut.CheckAsync(command, CancellationToken.None);
@@ -80,16 +80,35 @@ public class ZaraStockCheckServiceTests
     }
 
     [Fact]
+    public async Task CheckAsync_WhenStoreCheckReturnsQuantityAndLastUnit_PropagatesToStockResultEvent()
+    {
+        // Faz 6.1 — kullanıcı talebiyle eklendi: mağazanın gerçek `stock` sayısı ve ondan türetilen
+        // "son ürün" bilgisi StockResultEvent'e taşınmalı.
+        var storeId = Guid.NewGuid();
+        var command = StoreCommand(storeId);
+        _apiClient.Setup(c => c.CheckStoreStockAsync(command.ProductCode, command.Size, "1236", ProductUrl, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new StockCheckResult(true, 1, true));
+
+        var sut = CreateSut();
+        var result = await sut.CheckAsync(command, CancellationToken.None);
+
+        result.Quantity.Should().Be(1);
+        result.IsLastUnit.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task CheckAsync_WhenApiReturnsNull_MapsToUnknownStatus()
     {
         var command = OnlineCommand();
         _apiClient.Setup(c => c.CheckOnlineStockAsync(command.ProductCode, command.Size, ProductUrl, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((bool?)null);
+            .ReturnsAsync((StockCheckResult?)null);
 
         var sut = CreateSut();
         var result = await sut.CheckAsync(command, CancellationToken.None);
 
         result.Status.Should().Be(StockStatus.Unknown);
+        result.Quantity.Should().BeNull();
+        result.IsLastUnit.Should().BeNull();
     }
 
     [Fact]
@@ -114,7 +133,7 @@ public class ZaraStockCheckServiceTests
     {
         var command = StoreCommand(Guid.NewGuid()) with { BrandSpecificStoreId = null };
         _apiClient.Setup(c => c.CheckOnlineStockAsync(command.ProductCode, command.Size, ProductUrl, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .ReturnsAsync(new StockCheckResult(true, null, null));
 
         var sut = CreateSut();
         var result = await sut.CheckAsync(command, CancellationToken.None);

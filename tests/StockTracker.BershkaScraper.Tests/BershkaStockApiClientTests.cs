@@ -60,7 +60,7 @@ public class BershkaStockApiClientTests
 
         var result = await sut.CheckOnlineStockAsync("02891054426", "36", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
         pdpFetcher.Verify(f => f.FetchProductSizesJsonAsync(ProductUrl, It.IsAny<CancellationToken>()), Times.Once);
         redisDb.Invocations.Count(i => i.Method.Name == nameof(IDatabaseAsync.StringSetAsync)).Should().Be(1);
     }
@@ -79,8 +79,8 @@ public class BershkaStockApiClientTests
         var xsResult = await sut.CheckOnlineStockAsync("03327360676", "XS", ProductUrl, CancellationToken.None);
         var sResult = await sut.CheckOnlineStockAsync("03327360676", "S", ProductUrl, CancellationToken.None);
 
-        xsResult.Should().BeTrue();
-        sResult.Should().BeFalse();
+        xsResult!.InStock.Should().BeTrue();
+        sResult!.InStock.Should().BeFalse();
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class BershkaStockApiClientTests
 
         var result = await sut.CheckOnlineStockAsync("03449692712", "M", ProductUrl, CancellationToken.None);
 
-        result.Should().BeFalse();
+        result!.InStock.Should().BeFalse();
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public class BershkaStockApiClientTests
 
         var result = await sut.CheckOnlineStockAsync("03327360676", "xs", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public class BershkaStockApiClientTests
 
         var result = await sut.CheckOnlineStockAsync("03327360676", "XS", ProductUrl, CancellationToken.None);
 
-        result.Should().BeFalse();
+        result!.InStock.Should().BeFalse();
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public class BershkaStockApiClientTests
 
         var result = await sut.CheckOnlineStockAsync("02891054426", "36", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
         pdpFetcher.Verify(f => f.FetchProductSizesJsonAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -168,7 +168,7 @@ public class BershkaStockApiClientTests
 
         var result = await sut.CheckStoreStockAsync("02891054426", "36", "16884", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
         var stockUri = stockHandler.RequestedUris.Should().ContainSingle().Subject;
         stockUri.Should().Contain("part-number/0289105442636");
         stockUri.Should().Contain("campaign/I2026");
@@ -186,7 +186,7 @@ public class BershkaStockApiClientTests
 
         var result = await sut.CheckStoreStockAsync("02891054426", "36", "16884", ProductUrl, CancellationToken.None);
 
-        result.Should().BeFalse();
+        result!.InStock.Should().BeFalse();
     }
 
     [Fact]
@@ -204,7 +204,7 @@ public class BershkaStockApiClientTests
 
         var result = await sut.CheckStoreStockAsync("03348692122", "M", "8359", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
     }
 
     [Fact]
@@ -282,7 +282,7 @@ public class BershkaStockApiClientTests
         // (fam1'e ait) gönderilse bile, çünkü eşleştirme artık ColorId'ye (son 3 hane: 507) göre yapılıyor.
         var result = await sut.CheckOnlineStockAsync("01337711507", "M", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
     }
 
     [Fact]
@@ -320,7 +320,7 @@ public class BershkaStockApiClientTests
 
         var result = await sut.CheckStoreStockAsync("01337711507", "M", "8359", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
         stockHandler.RequestedUris.Should().HaveCount(2);
         stockHandler.RequestedUris.Should().Contain(u => u.Contains("part-number/0133771150703"));
         stockHandler.RequestedUris.Should().Contain(u => u.Contains("part-number/0133701550703"));

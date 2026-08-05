@@ -55,7 +55,7 @@ public class ZaraStockApiClientTests
 
         var result = await sut.CheckOnlineStockAsync("5063/821/802", "S", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
         pdpFetcher.Verify(f => f.FetchProductDataJsonAsync(ProductUrl, It.IsAny<CancellationToken>()), Times.Once);
         redisDb.Invocations.Count(i => i.Method.Name == nameof(IDatabaseAsync.StringSetAsync)).Should().Be(1);
     }
@@ -72,7 +72,7 @@ public class ZaraStockApiClientTests
 
         var result = await sut.CheckOnlineStockAsync("7196/399/620", "XS", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public class ZaraStockApiClientTests
 
         var result = await sut.CheckOnlineStockAsync("5063/821/802", "M", ProductUrl, CancellationToken.None);
 
-        result.Should().BeFalse();
+        result!.InStock.Should().BeFalse();
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public class ZaraStockApiClientTests
 
         var result = await sut.CheckOnlineStockAsync("5063/821/802", "s", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public class ZaraStockApiClientTests
 
         var result = await sut.CheckOnlineStockAsync("5063/821/802", "S", ProductUrl, CancellationToken.None);
 
-        result.Should().BeFalse();
+        result!.InStock.Should().BeFalse();
     }
 
     [Fact]
@@ -142,7 +142,7 @@ public class ZaraStockApiClientTests
 
         var result = await sut.CheckOnlineStockAsync("5063/821/802", "S", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
         pdpFetcher.Verify(f => f.FetchProductDataJsonAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -158,7 +158,7 @@ public class ZaraStockApiClientTests
 
         var result = await sut.CheckStoreStockAsync("5063/821/802", "S", "1236", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
         pdpFetcher.Verify(f => f.FetchStoreAvailabilityJsonAsync(ProductUrl, "999888777", "1236", It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -170,7 +170,7 @@ public class ZaraStockApiClientTests
 
         var result = await sut.CheckStoreStockAsync("5063/821/802", "S", "1236", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
         pdpFetcher.Verify(f => f.FetchStoreAvailabilityJsonAsync(ProductUrl, "547843031", "1236", It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -183,7 +183,7 @@ public class ZaraStockApiClientTests
 
         var result = await sut.CheckStoreStockAsync("5063/821/802", "S", "1236", ProductUrl, CancellationToken.None);
 
-        result.Should().BeFalse();
+        result!.InStock.Should().BeFalse();
     }
 
     [Fact]
@@ -200,7 +200,7 @@ public class ZaraStockApiClientTests
 
         var result = await sut.CheckStoreStockAsync("5063/821/802", "S", "251", ProductUrl, CancellationToken.None);
 
-        result.Should().BeFalse();
+        result!.InStock.Should().BeFalse();
     }
 
     [Fact]
@@ -212,7 +212,7 @@ public class ZaraStockApiClientTests
 
         var result = await sut.CheckStoreStockAsync("5063/821/802", "S", "1236", ProductUrl, CancellationToken.None);
 
-        result.Should().BeFalse();
+        result!.InStock.Should().BeFalse();
     }
 
     [Fact]
@@ -247,6 +247,6 @@ public class ZaraStockApiClientTests
 
         var result = await sut.CheckStoreStockAsync("5063/821/802", "s", "1236", ProductUrl, CancellationToken.None);
 
-        result.Should().BeTrue();
+        result!.InStock.Should().BeTrue();
     }
 }

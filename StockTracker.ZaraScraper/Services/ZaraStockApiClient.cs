@@ -73,13 +73,15 @@ public class ZaraStockApiClient : IZaraStockApiClient
         "low_on_stock"
     };
 
-    public async Task<bool?> CheckOnlineStockAsync(string productCode, string size, string productUrl, CancellationToken cancellationToken)
+    public async Task<StockCheckResult?> CheckOnlineStockAsync(string productCode, string size, string productUrl, CancellationToken cancellationToken)
     {
         var sizeEntry = await ResolveSizeEntryAsync(productCode, size, productUrl, cancellationToken);
-        return sizeEntry is null ? null : InStockAvailabilityValues.Contains(sizeEntry.Availability);
+        // Online kontrolde sayısal miktar yok (yalnızca "in_stock"/"low_on_stock" gibi string enum) —
+        // Quantity/IsLastUnit her zaman null.
+        return sizeEntry is null ? null : new StockCheckResult(InStockAvailabilityValues.Contains(sizeEntry.Availability), null, null);
     }
 
-    public async Task<bool?> CheckStoreStockAsync(string productCode, string size, string brandSpecificStoreId, string productUrl, CancellationToken cancellationToken)
+    public async Task<StockCheckResult?> CheckStoreStockAsync(string productCode, string size, string brandSpecificStoreId, string productUrl, CancellationToken cancellationToken)
     {
         // Birincil kaynak: PDP verisinin kendi `colors[].productId` alanı (ColorId eşleşmesiyle) — URL'in
         // `v1` parametresini içermesine bağımlı değil (bkz. sınıf üstündeki yorum). PDP hiç çekilemezse
@@ -114,9 +116,10 @@ public class ZaraStockApiClient : IZaraStockApiClient
         }
 
         // CANLI VERİYLE DOĞRULANAN DAVRANIŞ: dizide hiç yer almayan mağaza = o üründen o mağazada YOK
-        // (Unknown değil). Bkz. sınıf üstündeki yorum.
+        // (Unknown değil). Bkz. sınıf üstündeki yorum. Mağaza/beden hiç bulunamadığında kesin bir miktar
+        // bilmiyoruz (0 değil, "veri yok") — Quantity null kalıyor.
         var storeEntry = stores.FirstOrDefault(s => s.PhysicalStoreId == targetStoreId);
-        if (storeEntry is null) return false;
+        if (storeEntry is null) return new StockCheckResult(false, null, null);
 
         var storeSizeEntry = (storeEntry.SizesAvailability ?? [])
             .FirstOrDefault(s => string.Equals(s.Size, size, StringComparison.OrdinalIgnoreCase));
@@ -124,9 +127,11 @@ public class ZaraStockApiClient : IZaraStockApiClient
         // Mağaza kaydı var ama bu beden hiç listelenmemiş — aynı "seyrek yanıt" mantığıyla, bu bedenden
         // o mağazada stok olmadığı anlamına geldiği varsayılıyor (ayrı bir "beden bazlı Unknown" durumu
         // canlı veriyle henüz gözlemlenmedi).
-        if (storeSizeEntry is null) return false;
+        if (storeSizeEntry is null) return new StockCheckResult(false, null, null);
 
-        return storeSizeEntry.Stock > 0;
+        // API tam sayısal miktar veriyor (`stock`) — Faz 6.1'de kullanıcı talebiyle StockResultEvent'e
+        // taşınıyor. IsLastUnit, Zara'nın API'sinde ayrı bir bayrak olmadığı için miktardan türetiliyor.
+        return new StockCheckResult(storeSizeEntry.Stock > 0, storeSizeEntry.Stock, storeSizeEntry.Stock == 1);
     }
 
     private async Task<SizeEntry?> ResolveSizeEntryAsync(string productCode, string size, string productUrl, CancellationToken cancellationToken)

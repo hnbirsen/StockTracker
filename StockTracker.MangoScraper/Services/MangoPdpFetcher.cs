@@ -117,7 +117,7 @@ public class MangoPdpFetcher : IMangoPdpFetcher
             if (colors is null || colors.Count == 0) continue;
 
             var flat = colors
-                .SelectMany(c => c.Sizes.Select(s => new SizeEntry(s.Label, s.Available, c.Id)))
+                .SelectMany(c => c.Sizes.Select(s => new SizeEntry(s.Label, s.Available, c.Id, s.LastUnits)))
                 .ToList();
 
             return flat.Count > 0 ? JsonSerializer.Serialize(flat, JsonOptions) : null;
@@ -175,7 +175,32 @@ public class MangoPdpFetcher : IMangoPdpFetcher
 
     private record MangoSizeDto(
         [property: JsonPropertyName("label")] string Label,
-        [property: JsonPropertyName("available")] bool Available);
+        [property: JsonPropertyName("available")] bool Available,
+        // Canlı veriyle doğrulandı: bu alan çoğunlukla `false`/`true` ama React Flight serileştirmesi
+        // JS `undefined` değerini `"$undefined"` LİTERAL STRING'İ olarak kodluyor — bu yüzden düz
+        // `bool?` değil özel bir converter gerekiyor (aksi halde JsonException fırlar).
+        [property: JsonPropertyName("lastUnits"), JsonConverter(typeof(NullableBoolOrUndefinedConverter))] bool? LastUnits);
 
-    private record SizeEntry(string Name, bool Available, string ColorId);
+    private record SizeEntry(string Name, bool Available, string ColorId, bool? LastUnits);
+
+    // React Flight (Next.js RSC) akışında JS `undefined` değeri `"$undefined"` string literal'i olarak
+    // kodlanıyor — gerçek bir bool bekleyen bir alanda hem `true`/`false` hem de bu string ile
+    // karşılaşılabiliyor (bkz. MangoSizeDto.LastUnits üstündeki not). String görülürse null (bilinmiyor)
+    // dönülüyor, exception fırlatılmıyor.
+    private class NullableBoolOrUndefinedConverter : JsonConverter<bool?>
+    {
+        public override bool? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+            reader.TokenType switch
+            {
+                JsonTokenType.True => true,
+                JsonTokenType.False => false,
+                _ => null
+            };
+
+        public override void Write(Utf8JsonWriter writer, bool? value, JsonSerializerOptions options)
+        {
+            if (value.HasValue) writer.WriteBooleanValue(value.Value);
+            else writer.WriteNullValue();
+        }
+    }
 }

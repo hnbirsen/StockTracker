@@ -63,13 +63,15 @@ public class BershkaStockApiClient : IBershkaStockApiClient
         _logger = logger;
     }
 
-    public async Task<bool?> CheckOnlineStockAsync(string productCode, string size, string productUrl, CancellationToken cancellationToken)
+    public async Task<StockCheckResult?> CheckOnlineStockAsync(string productCode, string size, string productUrl, CancellationToken cancellationToken)
     {
         var sizeEntry = await ResolveSizeEntryAsync(productCode, size, productUrl, cancellationToken);
-        return sizeEntry is null ? null : sizeEntry.Stock == "in_stock";
+        // Online kontrolde sayısal miktar/son-ürün bilgisi yok (yalnızca "in_stock"/"coming_soon"/
+        // "out_of_stock" string'i) — Quantity/IsLastUnit her zaman null.
+        return sizeEntry is null ? null : new StockCheckResult(sizeEntry.Stock == "in_stock", null, null);
     }
 
-    public async Task<bool?> CheckStoreStockAsync(string productCode, string size, string brandSpecificStoreId, string productUrl, CancellationToken cancellationToken)
+    public async Task<StockCheckResult?> CheckStoreStockAsync(string productCode, string size, string brandSpecificStoreId, string productUrl, CancellationToken cancellationToken)
     {
         var sizeEntry = await ResolveSizeEntryAsync(productCode, size, productUrl, cancellationToken);
         if (sizeEntry is null) return null;
@@ -155,7 +157,11 @@ public class BershkaStockApiClient : IBershkaStockApiClient
             return null;
         }
 
-        return totalQuantity > 0;
+        // Mağaza API'si tam sayısal miktar veriyor — Faz 6.1'de kullanıcı talebiyle bu artık
+        // StockResultEvent'e taşınıyor. IsLastUnit, Bershka'nın kendi API'sinde ayrı bir bayrak olmadığı
+        // için miktardan türetiliyor (Quantity == 1) — Mango'daki gibi API'nin kendi verdiği bir bayrak
+        // değil, bizim çıkardığımız bir sonuç.
+        return new StockCheckResult(totalQuantity > 0, totalQuantity, totalQuantity == 1);
     }
 
     // productUrl'e ait TÜM bedenlerin listesini (cache-aside ile) getirir, sonra verilen productCode'un

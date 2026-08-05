@@ -54,13 +54,15 @@ public class MangoStockApiClient : IMangoStockApiClient
         _logger = logger;
     }
 
-    public async Task<bool?> CheckOnlineStockAsync(string productCode, string size, string productUrl, CancellationToken cancellationToken)
+    public async Task<StockCheckResult?> CheckOnlineStockAsync(string productCode, string size, string productUrl, CancellationToken cancellationToken)
     {
         var sizeEntry = await ResolveSizeEntryAsync(productCode, size, productUrl, cancellationToken);
-        return sizeEntry?.Available;
+        // Online kontrolde sayısal miktar yok — Quantity her zaman null. IsLastUnit, API'nin kendi
+        // `lastUnits` bayrağından doğrudan geliyor (bkz. sınıf üstündeki yorum).
+        return sizeEntry is null ? null : new StockCheckResult(sizeEntry.Available, null, sizeEntry.LastUnits);
     }
 
-    public async Task<bool?> CheckStoreStockAsync(string productCode, string size, string brandSpecificStoreId, double storeLatitude, double storeLongitude, CancellationToken cancellationToken)
+    public async Task<StockCheckResult?> CheckStoreStockAsync(string productCode, string size, string brandSpecificStoreId, double storeLatitude, double storeLongitude, CancellationToken cancellationToken)
     {
         if (!TrySplitProductCode(productCode, out var productId, out var colorId))
         {
@@ -112,10 +114,19 @@ public class MangoStockApiClient : IMangoStockApiClient
         // CANLI VERİYLE DOĞRULANAN DAVRANIŞ (bkz. sınıf üstündeki yorum): dizide hiç yer almayan mağaza,
         // o üründen/renkten o mağazada YOK demek — Unknown değil, False.
         var storeEntry = stores.FirstOrDefault(s => string.Equals(s.Id, brandSpecificStoreId, StringComparison.Ordinal));
-        if (storeEntry is null) return false;
+        if (storeEntry is null) return new StockCheckResult(false, null, null);
 
-        return (storeEntry.Sizes ?? [])
+        var inStock = (storeEntry.Sizes ?? [])
             .Any(s => string.Equals(s, size, StringComparison.OrdinalIgnoreCase));
+
+        // Mango'nun mağaza API'si sayısal miktar vermiyor — Quantity her zaman null. IsLastUnit,
+        // `sizesIds[].isLastUnit` alanından doğrudan geliyor (API'nin kendi bayrağı, bizim türettiğimiz
+        // bir değer değil — bkz. sınıf üstündeki yorum).
+        var isLastUnit = (storeEntry.SizesIds ?? [])
+            .FirstOrDefault(s => string.Equals(s.Name, size, StringComparison.OrdinalIgnoreCase))
+            ?.IsLastUnit;
+
+        return new StockCheckResult(inStock, null, isLastUnit);
     }
 
     private static bool TrySplitProductCode(string productCode, out string productId, out string colorId)
@@ -196,12 +207,18 @@ public class MangoStockApiClient : IMangoStockApiClient
         return sizes;
     }
 
-    private record SizeEntry(string Name, bool Available, string ColorId);
+    private record SizeEntry(string Name, bool Available, string ColorId, bool? LastUnits);
 
     private record StoreFinderResponseDto(
         [property: JsonPropertyName("stores")] List<StoreEntryDto>? Stores);
 
     private record StoreEntryDto(
         [property: JsonPropertyName("id")] string Id,
-        [property: JsonPropertyName("sizes")] List<string>? Sizes);
+        [property: JsonPropertyName("sizes")] List<string>? Sizes,
+        [property: JsonPropertyName("sizesIds")] List<SizeIdDto>? SizesIds);
+
+    // Canlı veriyle doğrulanan gerçek şekil: {"id":"20","name":"S","isLastUnit":true}.
+    private record SizeIdDto(
+        [property: JsonPropertyName("name")] string Name,
+        [property: JsonPropertyName("isLastUnit")] bool IsLastUnit);
 }

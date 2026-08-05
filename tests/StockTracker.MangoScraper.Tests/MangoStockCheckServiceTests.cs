@@ -51,7 +51,7 @@ public class MangoStockCheckServiceTests
     {
         var command = OnlineCommand();
         _apiClient.Setup(c => c.CheckOnlineStockAsync(command.ProductCode, command.Size, ProductUrl, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .ReturnsAsync(new StockCheckResult(true, null, null));
 
         var sut = CreateSut();
         var result = await sut.CheckAsync(command, CancellationToken.None);
@@ -69,7 +69,7 @@ public class MangoStockCheckServiceTests
         var storeId = Guid.NewGuid();
         var command = StoreCommand(storeId);
         _apiClient.Setup(c => c.CheckStoreStockAsync(command.ProductCode, command.Size, "10389", 40.96, 29.08, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .ReturnsAsync(new StockCheckResult(false, null, null));
 
         var sut = CreateSut();
         var result = await sut.CheckAsync(command, CancellationToken.None);
@@ -82,16 +82,35 @@ public class MangoStockCheckServiceTests
     }
 
     [Fact]
+    public async Task CheckAsync_WhenStoreCheckReturnsIsLastUnit_PropagatesToStockResultEventWithNullQuantity()
+    {
+        // Faz 6.1 — kullanıcı talebiyle eklendi: Mango sayısal miktar vermiyor (Quantity her zaman null),
+        // ama API'nin kendi `isLastUnit` bayrağı StockResultEvent'e taşınmalı.
+        var storeId = Guid.NewGuid();
+        var command = StoreCommand(storeId);
+        _apiClient.Setup(c => c.CheckStoreStockAsync(command.ProductCode, command.Size, "10389", 40.96, 29.08, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new StockCheckResult(true, null, true));
+
+        var sut = CreateSut();
+        var result = await sut.CheckAsync(command, CancellationToken.None);
+
+        result.Quantity.Should().BeNull();
+        result.IsLastUnit.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task CheckAsync_WhenApiReturnsNull_MapsToUnknownStatus()
     {
         var command = OnlineCommand();
         _apiClient.Setup(c => c.CheckOnlineStockAsync(command.ProductCode, command.Size, ProductUrl, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((bool?)null);
+            .ReturnsAsync((StockCheckResult?)null);
 
         var sut = CreateSut();
         var result = await sut.CheckAsync(command, CancellationToken.None);
 
         result.Status.Should().Be(StockStatus.Unknown);
+        result.Quantity.Should().BeNull();
+        result.IsLastUnit.Should().BeNull();
     }
 
     [Fact]
@@ -118,7 +137,7 @@ public class MangoStockCheckServiceTests
         // store_db kaydı (koordinatsız) online kontrole düşmeli, hata fırlatmamalı.
         var command = StoreCommand(Guid.NewGuid()) with { StoreLatitude = null, StoreLongitude = null };
         _apiClient.Setup(c => c.CheckOnlineStockAsync(command.ProductCode, command.Size, ProductUrl, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .ReturnsAsync(new StockCheckResult(true, null, null));
 
         var sut = CreateSut();
         var result = await sut.CheckAsync(command, CancellationToken.None);
