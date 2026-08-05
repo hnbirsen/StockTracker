@@ -87,6 +87,7 @@ public class StoreReferenceDbContext : DbContext
         var hmId = Guid.Parse("e5f6a7b8-c9d0-1234-eabc-345678901234");
         var massimoDuttiId = Guid.Parse("f6a7b8c9-d0e1-2345-fabc-456789012345");
         var beymenId = Guid.Parse("a7b8c9d0-e1f2-3456-abcd-567890123456");
+        var stradivariusId = Guid.Parse("b8c9d0e1-f2a3-4567-bcde-678901234567");
         var seedCreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         modelBuilder.Entity<Store>().HasData(
@@ -461,6 +462,68 @@ public class StoreReferenceDbContext : DbContext
                 District = "Bornova",
                 StoreName = "Forum Bornova AVM",
                 BrandSpecificStoreId = "5334",
+                Latitude = 38.45034027,
+                Longitude = 27.2086791,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            // Stradivarius: `BrandSpecificStoreId` GERÇEK sayısal mağaza ID'leri (Zara/Massimo Dutti/
+            // Pull&Bear'daki gibi) — kullanıcının kendi tarayıcısından paylaştığı gerçek `curl` istekleri
+            // sayesinde bulunan `itxrest/2/bam/store/54009571/physical-store` mağaza bulucu API'sinden
+            // (enlem/boylam ile "yakındaki mağazalar" araması, yalnızca KEŞİF için) doğrulandı. 4 mağaza da
+            // Pull&Bear'ınkiyle BİREBİR AYNI AVM'ler (City's Kozyatağı, Cevahir, Kentpark, Forum Bornova) —
+            // aynı bina, aynı enlem/boylam kullanıldı. Bkz. `.claude/ARCHITECTURE.md` > Stradivarius Scraper.
+            new Store
+            {
+                Id = Guid.Parse("d8888888-0000-0000-0000-000000000001"),
+                BrandId = stradivariusId,
+                BrandName = "Stradivarius",
+                City = "Istanbul",
+                District = "Kadikoy",
+                StoreName = "City's Kozyatağı AVM",
+                BrandSpecificStoreId = "16879",
+                Latitude = 40.9800391,
+                Longitude = 29.0993434,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d8888888-0000-0000-0000-000000000002"),
+                BrandId = stradivariusId,
+                BrandName = "Stradivarius",
+                City = "Istanbul",
+                District = "Sisli",
+                StoreName = "Cevahir AVM",
+                BrandSpecificStoreId = "2859",
+                Latitude = 41.063595,
+                Longitude = 28.992115,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d8888888-0000-0000-0000-000000000003"),
+                BrandId = stradivariusId,
+                BrandName = "Stradivarius",
+                City = "Ankara",
+                District = "Cankaya",
+                StoreName = "Kentpark AVM",
+                BrandSpecificStoreId = "2968",
+                Latitude = 39.909011,
+                Longitude = 32.77629,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d8888888-0000-0000-0000-000000000004"),
+                BrandId = stradivariusId,
+                BrandName = "Stradivarius",
+                City = "Izmir",
+                District = "Bornova",
+                StoreName = "Forum Bornova AVM",
+                BrandSpecificStoreId = "2868",
                 Latitude = 38.45034027,
                 Longitude = 27.2086791,
                 IsActive = true,

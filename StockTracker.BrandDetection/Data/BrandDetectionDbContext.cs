@@ -69,6 +69,7 @@ public class BrandDetectionDbContext : DbContext
         var hmId = Guid.Parse("e5f6a7b8-c9d0-1234-eabc-345678901234");
         var massimoDuttiId = Guid.Parse("f6a7b8c9-d0e1-2345-fabc-456789012345");
         var beymenId = Guid.Parse("a7b8c9d0-e1f2-3456-abcd-567890123456");
+        var stradivariusId = Guid.Parse("b8c9d0e1-f2a3-4567-bcde-678901234567");
 
         modelBuilder.Entity<BrandCodeSignature>().HasData(
             new BrandCodeSignature
@@ -142,6 +143,23 @@ public class BrandDetectionDbContext : DbContext
                 BrandId = beymenId,
                 BrandName = "Beymen",
                 RegexPattern = @"^\d{7}$",
+                Confidence = ConfidenceLevel.Medium,
+                IsActive = true,
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            },
+            new BrandCodeSignature
+            {
+                Id = Guid.Parse("88888888-8888-8888-8888-888888888888"),
+                BrandId = stradivariusId,
+                BrandName = "Stradivarius",
+                RegexPattern = @"^\d{8}$",
+                // Stradivarius'un URL yapısındaki ürün kodu (ör. "/tr/asimetrik-kareli-midi-elbise-l06383188"
+                // -> "06383188") ayraçsız, düz 8 haneli sayısal — REF görünümündeki "6383/188/450"
+                // (base/renk/ekstra) değerinin "0" + base(4) + renk(3) birleştirilmiş hali. Faz 6.1'de gerçek
+                // stradivarius.com PDP'sinden doğrulandı. Diğer 8 haneli markalarla (Massimo Dutti, Pull&Bear
+                // — ikisi de "^\d{8}/\d{3}$" ayraçlı) ÇAKIŞMIYOR çünkü Stradivarius'ta ayraç yok — ama tek bir
+                // gerçek örnek üzerinden genellendiği ve fiziksel ürün etiketi formatı doğrulanmadığı için
+                // Medium tutuldu (Beymen'deki gerekçeyle aynı).
                 Confidence = ConfidenceLevel.Medium,
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)

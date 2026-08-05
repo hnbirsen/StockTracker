@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using StockTracker.StoreReference.Data;
@@ -11,9 +12,11 @@ using StockTracker.StoreReference.Data;
 namespace StockTracker.StoreReference.Migrations
 {
     [DbContext(typeof(StoreReferenceDbContext))]
-    partial class StoreReferenceDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260805174248_AddStradivariusStores")]
+    partial class AddStradivariusStores
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -454,7 +457,7 @@ namespace StockTracker.StoreReference.Migrations
                             Id = new Guid("d8888888-0000-0000-0000-000000000001"),
                             BrandId = new Guid("b8c9d0e1-f2a3-4567-bcde-678901234567"),
                             BrandName = "Stradivarius",
-                            BrandSpecificStoreId = "16879",
+                            BrandSpecificStoreId = "City's Kozyatağı AVM, Kadıköy, İstanbul",
                             City = "Istanbul",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             District = "Kadikoy",
@@ -468,7 +471,7 @@ namespace StockTracker.StoreReference.Migrations
                             Id = new Guid("d8888888-0000-0000-0000-000000000002"),
                             BrandId = new Guid("b8c9d0e1-f2a3-4567-bcde-678901234567"),
                             BrandName = "Stradivarius",
-                            BrandSpecificStoreId = "2859",
+                            BrandSpecificStoreId = "Cevahir AVM, Şişli, İstanbul",
                             City = "Istanbul",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             District = "Sisli",
@@ -482,7 +485,7 @@ namespace StockTracker.StoreReference.Migrations
                             Id = new Guid("d8888888-0000-0000-0000-000000000003"),
                             BrandId = new Guid("b8c9d0e1-f2a3-4567-bcde-678901234567"),
                             BrandName = "Stradivarius",
-                            BrandSpecificStoreId = "2968",
+                            BrandSpecificStoreId = "Kentpark AVM, Çankaya, Ankara",
                             City = "Ankara",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             District = "Cankaya",
@@ -496,7 +499,7 @@ namespace StockTracker.StoreReference.Migrations
                             Id = new Guid("d8888888-0000-0000-0000-000000000004"),
                             BrandId = new Guid("b8c9d0e1-f2a3-4567-bcde-678901234567"),
                             BrandName = "Stradivarius",
-                            BrandSpecificStoreId = "2868",
+                            BrandSpecificStoreId = "Forum Bornova AVM, Bornova, İzmir",
                             City = "Izmir",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             District = "Bornova",
