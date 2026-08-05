@@ -102,10 +102,14 @@ public class StockPollerService : IStockPollerService
         }
 
         string? brandSpecificStoreId = null;
+        double? storeLatitude = null;
+        double? storeLongitude = null;
         if (watchGroup.StoreId is { } storeId)
         {
             var store = await _storeClient.GetStoreByIdAsync(storeId);
             brandSpecificStoreId = store?.BrandSpecificStoreId;
+            storeLatitude = store?.Latitude;
+            storeLongitude = store?.Longitude;
         }
 
         var queueName = QueueNaming.StockCheckQueue(lookup.ScraperQueueName);
@@ -122,7 +126,9 @@ public class StockPollerService : IStockPollerService
             City: null,
             District: null,
             ProductUrl: lookup.ProductUrl,
-            RequestedAt: DateTime.UtcNow
+            RequestedAt: DateTime.UtcNow,
+            StoreLatitude: storeLatitude,
+            StoreLongitude: storeLongitude
         ), cancellationToken);
 
         _logger.LogInformation(

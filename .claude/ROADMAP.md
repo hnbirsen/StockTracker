@@ -217,13 +217,14 @@ Bershka entegrasyonu sırasında doğrulandı: hedef siteler en azından User-Ag
 
 ## Faz 6 — Ek Markalar + Stabilizasyon
 
-### Faz 6.1 — Yeni Marka Onboarding Şablonu 🔄 (Zara tamamlandı, Pull&Bear planlanan)
+### Faz 6.1 — Yeni Marka Onboarding Şablonu 🔄 (Zara + Mango tamamlandı, Pull&Bear planlanan)
 
 Faz 5 (frontend) tasarım beklerken kullanıcı kararıyla öne alındı — "faz 5'i beklerken 6'ya geçelim ve 6.1'den devam edelim".
 
 - [x] **Zara scraper ekleme (`StockTracker.ZaraScraper`, port 5010)** — Bershka'daki gibi tamamen canlı zara.com trafiğiyle (network capture + curl) keşfedildi, hiçbir endpoint/format tahmin edilmedi. Detaylı bulgular ve mimari kararlar için bkz. `.claude/ARCHITECTURE.md` → Zara Scraper: gerçek ürün kodu formatı (`^\d{4}/\d{3}/\d{3}$`, brand_db regex'i düzeltildi), online stok (`window.zara.viewPayload` SSR verisi), mağaza bazlı stok (`store-product-availability` endpoint'i — kullanıcının "sonraya bırakamayız" ısrarıyla derinlemesine araştırıldı; Akamai korumalı, `productId`=URL'in `v1` parametresi, seyrek/sparse yanıt semantiği, hıza dayalı Akamai bloklaması bulundu ve `PlaywrightZaraFetcher`'a rate-limiting olarak yansıtıldı), `store_db`'ye gerçek mağaza ID'leri eklendi (Kentpark/Ankara=251, Forum Bornova/Izmir=3643, Bağdat Cad./Kadıköy=3231, Cevahir/Şişli=12692). 20 unit test. **Henüz gerçek Chrome/Playwright ile canlı uçtan uca smoke-test yapılmadı** (Bershka'nın 5 turluk doğrulama sürecine benzer bir aşama kaldı).
+- [x] **Mango scraper ekleme (`StockTracker.MangoScraper`, port 5011)** — shop.mango.com/tr/tr trafiğiyle canlı keşfedildi. Bershka/Zara'dan köklü farkı: **hiçbir bot koruması yok** (Akamai/benzeri yok, `curl` bile gerçekçi UA ile çalışıyor) — bu yüzden Playwright YOK, düz dayanıklılık-politikalı `HttpClient` yeterli. Detaylar için bkz. `.claude/ARCHITECTURE.md` → Mango Scraper: ürün kodu formatı (`^\d{8}/\d{2}$`, Medium confidence), online stok (Next.js RSC akışından `colors[].sizes[].available` boolean), mağaza bazlı stok (`store-finder/v2/stores/stock` — Zara'nın "belirli mağaza ID" modelinin AKSİNE enlem/boylam ile "yakındaki mağazalar" araması; bu yüzden `CheckStockCommand` V2'ye `StoreLatitude`/`StoreLongitude`, `store_db`'ye `Latitude`/`Longitude` eklendi, Search Orchestrator + Stock Poller güncellendi), `store_db`'ye gerçek mağaza ID'leri + koordinatları eklendi (Bağdat Cad./Kadıköy=10389, Cevahir/Şişli=10277, CEPA/Çankaya=10403, Forum Bornova/Izmir=10711). 24 unit test (geliştirme sırasında gerçek bir camelCase/PascalCase deserialization hatası bulunup düzeltildi). **Derlenmiş üretim kodu gerçek Mango'ya karşı uçtan uca canlı doğrulandı** (RabbitMQ hariç) — Zara'nın aksine bu adım bu ortamda tamamlanabildi, çünkü Playwright/gerçek Chrome bağımlılığı yok.
 - [ ] Pull&Bear scraper ekleme
-- [ ] Marka ekleme checklist dokümanı (regex keşfi → site-search → store mapping → scraper → health monitoring) — Zara + Bershka deneyiminden sonra, Pull&Bear'dan önce yazılması daha faydalı olacak
+- [ ] Marka ekleme checklist dokümanı (regex keşfi → site-search → store mapping → scraper → health monitoring) — Zara + Bershka + Mango deneyiminden sonra, Pull&Bear'dan önce yazılması daha faydalı olacak
 
 ### Faz 6.2 — Uçtan Uca Yük/Stabilite Testi 🔜
 - [ ] 50-100 sahte kullanıcı ile watch-group dedup testi

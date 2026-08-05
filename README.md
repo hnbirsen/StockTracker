@@ -56,6 +56,8 @@ flowchart LR
     Scraper -.-> MQ
     MQ -.-> ZaraScraper[ZaraScraper :5010]
     ZaraScraper -.-> MQ
+    MQ -.-> MangoScraper[MangoScraper :5011]
+    MangoScraper -.-> MQ
 ```
 
 ## Services
@@ -73,6 +75,7 @@ flowchart LR
 | StockTracker.Notification | 5008 | FCM push + email notifications | ✅ Done — restock detection, idempotency, real SMTP integration (own mail server, no 3rd-party email provider) wired (real Firebase account + SMTP server credentials pending) |
 | StockTracker.BershkaScraper | 5009 | Consumes `CheckStockCommand`, publishes `StockResultEvent` | ✅ Done — real Bershka/Inditex API wired up |
 | StockTracker.ZaraScraper | 5010 | Consumes `CheckStockCommand`, publishes `StockResultEvent` | ✅ Done — real Zara API wired up (live end-to-end Chrome smoke-test still pending) |
+| StockTracker.MangoScraper | 5011 | Consumes `CheckStockCommand`, publishes `StockResultEvent` | ✅ Done — real Mango API wired up, live end-to-end verified (no bot protection, no Playwright needed) |
 | StockTracker.Shared.Contracts | — | Shared DTOs, RabbitMQ message contracts (`CheckStockCommand`, `StockResultEvent`) and MassTransit setup | ✅ In use |
 | StockTracker.Shared.Scraping | — | Cross-scraper shared library — Redis-backed `IScraperHealthLogService`, plus `Http/` (host-based token-bucket rate limiting, realistic rotating browser header profiles, Retry-After-aware retry + separate bot-detection circuit breaker) | ✅ In use |
 
@@ -92,6 +95,7 @@ flowchart LR
 | Search Orchestrator + RabbitMQ integration | ✅ Done |
 | Bershka Scraper (consumer, Polly, UA rotation, real Bershka/Inditex stock + store-locator API, `StockResultEvent` publish) | ✅ Done |
 | Zara Scraper (consumer, real Zara SSR online stock + Akamai-protected store-availability API via in-page Playwright fetch, velocity-based rate limiting, `StockResultEvent` publish) | ✅ Done |
+| Mango Scraper (consumer, real Mango RSC online stock + lat/lng-based store-finder API, no bot protection so plain resilient `HttpClient` — no Playwright, `StockResultEvent` publish) | ✅ Done — live end-to-end verified |
 | Scraper Health Monitoring (`GET /health/scraper-stats`, `GET /health/scraper-failures`, Redis-backed, shared across future scrapers) | ✅ Done |
 | Scraper scalability & bot-detection hardening (host rate limiting, 429/`Retry-After`, bot-detection circuit breaker, realistic header profiles) | ✅ Done — proxy/IP rotation deferred (needs a paid provider, see ROADMAP Faz 7) |
 | Subscription Service (watch groups, dedup, `POST`/`GET`/`DELETE /watches`) | ✅ Done |
@@ -161,6 +165,7 @@ dotnet run --project StockTracker.Billing           # :5007
 dotnet run --project StockTracker.Notification      # :5008
 dotnet run --project StockTracker.BershkaScraper    # :5009 (RabbitMQ consumer only, no HTTP endpoints besides /health)
 dotnet run --project StockTracker.ZaraScraper       # :5010 (RabbitMQ consumer only, no HTTP endpoints besides /health)
+dotnet run --project StockTracker.MangoScraper      # :5011 (RabbitMQ consumer only, no HTTP endpoints besides /health; no Playwright needed)
 ```
 
 When working on a single service, bring up only the infrastructure and run that service from your IDE:
@@ -174,7 +179,7 @@ Health check all services:
 
 ```bash
 curl http://localhost:8000/health/gateway
-for port in 5001 5002 5003 5004 5005 5006 5007 5008 5009 5010; do
+for port in 5001 5002 5003 5004 5005 5006 5007 5008 5009 5010 5011; do
   echo -n ":$port → " && curl -s http://localhost:$port/health
   echo
 done
@@ -382,6 +387,8 @@ All secrets are provided via environment variables, never hardcoded in `appsetti
 
 Zara Scraper needs no equivalent `ZARA_STOCK_API_BASE_URL` — unlike Bershka, there is no separate stock API host; both online and store-availability data are read via Playwright directly against `www.zara.com` (relative paths hardcoded in `PlaywrightZaraFetcher`, since the endpoint is Akamai-protected and must be called from within an already-cleared browser session — see Development Notes below). It reuses `REDIS_CONNECTION` and the shared RabbitMQ env vars, same as Bershka.
 
+Mango Scraper also needs no extra env var — its store-finder API host (`api.shop.mango.com`) is hardcoded in `MangoStockApiClient`'s typed `HttpClient` registration, since (unlike Zara) it isn't behind any bot protection and doesn't need special session handling. Reuses `REDIS_CONNECTION` and shared RabbitMQ env vars.
+
 Copy `.env example` to `.env` and fill in the values. The `.env` file is gitignored.
 
 ## CI
@@ -404,6 +411,7 @@ GitHub Actions workflow at `.github/workflows/ci.yml` runs on every push to `mai
 - Message contracts live in `StockTracker.Shared.Contracts/Messages/V1/` and are wired up per-service via `AddStockTrackerRabbitMq(...)`. Queue naming follows `QueueNaming.StockCheckQueue(brandName)` → `stock.check.{brandName}`, one isolated queue per brand.
 - **Bershka Scraper reads real per-size stock data from the product page itself** — Bershka's product pages are behind Akamai Bot Manager, so a plain `HttpClient` can never load them, and even Playwright's bundled Chromium gets an instant "Access Denied"; `PlaywrightPdpFetcher` drives a real Chrome channel instead. Rather than parsing the page's minified JS as text (unreliable — some pages hoist string values into shared variables, so the real value is never written as a literal), it walks the page's live Vue component tree (`page.EvaluateAsync`) to read the already-resolved size/stock/part-number data straight from JS runtime state. Results are cached in Redis per product URL (15 min TTL) so repeated searches for the same product don't re-trigger Playwright. The store-specific physical stock check then queries `api.inditex.com/.../stock/campaign/...` with the real part-number read from the page. **Requires a one-time Playwright Chrome-channel install per machine** — see `.claude/ENVIRONMENT_SETUP.md` and the Setup section above. Full details, the productCode-format pitfalls that led here, and known limitations are in `.claude/ARCHITECTURE.md` → Bershka Scraper.
 - **Zara Scraper's store-availability check has no Akamai-free API to fall back on, unlike Bershka** — Bershka has a separate stock API host (`api.inditex.com`) that isn't behind Akamai, so a plain resilient `HttpClient` can call it directly once the part-number is known. Zara has no such host: its `store-product-availability` endpoint lives on `www.zara.com` itself and is protected exactly like the product page (confirmed live: `curl` gets 403 even with a realistic User-Agent). So `PlaywrightZaraFetcher` calls it via an in-page `fetch()` (`page.EvaluateAsync`) after navigating to the product page, reusing the cookies from the Akamai-cleared browser session rather than a separate HTTP client. Online stock, by contrast, is simpler than Bershka's: Zara embeds it server-side as `window.zara.viewPayload.product.detail.colors[].sizes[]`, no Vue-tree walk needed. A live-verified quirk: the endpoint enforces **velocity-based** rate limiting — a handful of rapid successive store-availability calls (even to a query that had just succeeded) got the whole browser session blocked, which a 15s pause did not clear. `PlaywrightZaraFetcher` therefore serializes store queries through a semaphore with a mandatory ~6s gap between them. Full details (including the sparse-response semantics — a store missing from the response array means "no stock there", not an error) are in `.claude/ARCHITECTURE.md` → Zara Scraper.
+- **Mango Scraper needs no Playwright at all** — unlike Bershka/Zara, neither its product page nor its store-finder API sits behind any bot-management system (confirmed live: plain `curl` with a realistic User-Agent gets a full `200` on both). So both `IMangoPdpFetcher` and `IMangoStockApiClient` are backed by plain resilient `HttpClient`s (same shared rate-limiting/retry/circuit-breaker policies as Bershka, applied out of politeness rather than necessity). Online stock comes from Next.js App Router's React Server Components stream (`self.__next_f.push([N, "..."])` chunks embedded in `<script>` tags) rather than a classic `__NEXT_DATA__` global — `MangoPdpFetcher` decodes the doubly-escaped JSON properly (outer array via `System.Text.Json`, then a bracket-balanced scan for the inner `"colors":[...]` array) rather than hand-rolled string replacement, since a naive unescape would mangle unicode/backslash sequences. The store-based check is architecturally different from Zara's: instead of querying a specific store ID, Mango's `store-finder/v2/stores/stock` endpoint takes a latitude/longitude and returns nearby stores — passing a store's own coordinates reliably surfaces that store (confirmed live), which is why `CheckStockCommand` (V2) gained `StoreLatitude`/`StoreLongitude` fields and `Store` gained matching nullable columns, Mango-only. Same sparse-response semantics as Zara apply (a real, existing store missing from the response means it doesn't carry that product/color, not an error).
 
 ## Project Structure
 
@@ -425,6 +433,7 @@ GitHub Actions workflow at `.github/workflows/ci.yml` runs on every push to `mai
 ├── StockTracker.Notification/
 ├── StockTracker.BershkaScraper/
 ├── StockTracker.ZaraScraper/
+├── StockTracker.MangoScraper/
 ├── StockTracker.Shared.Contracts/
 ├── StockTracker.Shared.Scraping/
 ├── tests/                       # xUnit test projects, one per service

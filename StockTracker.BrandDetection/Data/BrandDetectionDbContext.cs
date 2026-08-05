@@ -29,9 +29,17 @@ public class BrandDetectionDbContext : DbContext
         // Eski `^\d{5}/\d{3}/\d{2,3}$` deseni doğrulanmamış bir tahmindi, gerçek formatla uyuşmuyordu
         // (ilk grup 5 değil 4 rakam, renk kodu her zaman 3 rakam).
         // Seed: Pull&Bear — 8 haneli sayısal
+        // Seed: Mango — 8 haneli ürün referansı / 2 haneli renk kodu (ör. "37013869/56"). Faz 6.1'de
+        // shop.mango.com'un gerçek `online-orchestrator.mango.com/v4/products` API'sinden ("reference":
+        // "37013869") ve ürün sayfası URL yapısından (.../37013869/56/00) doğrulandı — 8 haneli temel
+        // referans kesin, ama fiziksel ürün etiketindeki TAM görünen format (ayraç dahil) doğrulanamadı
+        // (bu yüzden Medium tutuldu, Zara/Bershka gibi High değil). Bilinçli olarak "/" ayraçlı bileşik
+        // kod seçildi — yalnızca `^\d{8}$` olsaydı Pull&Bear'ın (henüz doğrulanmamış) `^\d{8}$` deseniyle
+        // birebir çakışırdı.
         var bershkaId = Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
         var zaraId = Guid.Parse("b2c3d4e5-f6a7-8901-bcde-f12345678901");
         var pullbearId = Guid.Parse("c3d4e5f6-a7b8-9012-cdef-123456789012");
+        var mangoId = Guid.Parse("d4e5f6a7-b8c9-0123-defa-234567890123");
 
         modelBuilder.Entity<BrandCodeSignature>().HasData(
             new BrandCodeSignature
@@ -65,6 +73,16 @@ public class BrandDetectionDbContext : DbContext
                 // Low tutuldu — Pull&Bear'ın gerçek kod formatı henüz bir ürün sayfası üzerinden doğrulanmadı
                 // (Bershka'nın artık 11 haneli olduğu doğrulandığı için önceki çakışma riski ortadan kalktı).
                 Confidence = ConfidenceLevel.Low,
+                IsActive = true,
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            },
+            new BrandCodeSignature
+            {
+                Id = Guid.Parse("44444444-4444-4444-4444-444444444444"),
+                BrandId = mangoId,
+                BrandName = "Mango",
+                RegexPattern = @"^\d{8}/\d{2}$",
+                Confidence = ConfidenceLevel.Medium,
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             }

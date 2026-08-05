@@ -71,6 +71,10 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 
 `zara:pdp-sizes:{productUrl}` → ürün sayfasının SSR verisinden (`window.zara.viewPayload`) okunan tüm bedenlerin listesi (`Name`, `Availability`, `ColorId`, `Sku`), 15 dakikalık TTL — yalnızca ONLINE stok için. Mağaza bazlı stok (`store-product-availability`) hiç önbelleklenmiyor, her zaman canlı sorgulanıyor (fiziksel stok daha hızlı değişiyor; Akamai hız-bazlı bloklamasına karşı zaten `PlaywrightZaraFetcher` içinde ayrı bir hız sınırlaması var — bkz. `.claude/ARCHITECTURE.md` → Zara Scraper).
 
+### Mango Scraper — Redis PDP cache-aside (kendi veritabanı yok)
+
+`mango:pdp-sizes:{productUrl}` → ürün sayfasının Next.js RSC akışından okunan tüm bedenlerin listesi (`Name`, `Available`, `ColorId`), 15 dakikalık TTL — yalnızca ONLINE stok için. Mağaza bazlı stok (`store-finder/v2/stores/stock`) hiç önbelleklenmiyor. Zara'dan farklı olarak bu scraper'da Playwright/Akamai bloklaması YOK (bkz. `.claude/ARCHITECTURE.md` → Mango Scraper) — Redis önbelleği yalnızca gereksiz tekrar isteklerden kaçınmak için, bot tespitinden kaçınmak için değil.
+
 ### Scraper Health Monitoring — Redis, tüm marka scraper'ları arasında paylaşılan (kendi veritabanı yok)
 
 `scraper:health:{scraperName}:log` → her scraper denemesinin (`source`, `success`, `httpStatusCode`, `errorMessage`, `context` — hangi ürün URL'i/mağaza/partnumber üzerinde olduğu, `durationMs`, `timestamp`) `LPUSH` ile eklendiği, `LTRIM` ile son 500 kayıtla sınırlanan capped-list. Bilinçli olarak ayrı bir Postgres DB (`bershka_scraper_db` gibi) yerine bu kullanıldı — bkz. `.claude/ARCHITECTURE.md` → Bershka Scraper → Scraper Health Monitoring, "Tasarım kararı" notu. `StockTracker.Shared.Scraping` projesindeki `IScraperHealthLogService` üzerinden okunur/yazılır; Zara/Pull&Bear gibi gelecek scraper'lar aynı servisi kendi `scraperName`'leriyle çağırarak sıfır ek altyapıyla kullanabilir.
@@ -88,18 +92,21 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 | Bershka | `^\d{11}$` | High |
 | Zara | `^\d{4}/\d{3}/\d{3}$` | High |
 | Pull&Bear | `^\d{8}$` | Low |
+| Mango | `^\d{8}/\d{2}$` | Medium |
 
 > Bershka'nın pattern'i, gerçek bershka.com ürün sayfaları üzerinden doğrulandı (Faz 2.4): önde sıfır + 4 haneli model + 3 haneli varyant + 3 haneli renk kodu (ör. REF `2891/054/426` → `02891054426`), `BershkaStockApiClient`'ın stok API'sine gönderdiği `productCode` ile birebir aynı format. Eski `^\d{7,9}$` deseni doğrulanmamış bir tahmindi.
 >
 > Zara'nın pattern'i, gerçek zara.com ürün sayfaları üzerinden doğrulandı (Faz 6.1): 4 haneli `displayReference` + 3 haneli varyant + 3 haneli `colors[].id` (ör. `5063/821/802`), çoklu gerçek örnekle (9083/479, 5372/323, 0962/307, ...) doğrulandı. Eski `^\d{5}/\d{3}/\d{2,3}$` deseni doğrulanmamış bir tahmindi, ilk grup 5 değil 4 rakamdı.
+>
+> Mango'nun pattern'i, gerçek shop.mango.com API'sinden (`online-orchestrator.mango.com/v4/products` → `"reference":"37013869"`) ve ürün URL yapısından (`.../37013869/56/00`) doğrulandı: 8 haneli temel referans + 2 haneli `colors[].id`. **Medium** tutuldu (Zara/Bershka'nın High'ının aksine) — temel 8 haneli referans kesin doğrulandı ama fiziksel üründeki TAM görünen format (ayraç dahil) doğrulanamadı. Bilinçli olarak `/` ayraçlı bileşik kod seçildi — yalnızca `^\d{8}$` olsaydı Pull&Bear'ın (henüz doğrulanmamış) deseniyle birebir çakışırdı.
 
 ### store_db
 
 | Tablo | Alanlar |
 |---|---|
-| `Stores` | Id, BrandId, BrandName, City, District, StoreName, BrandSpecificStoreId, IsActive, CreatedAt |
+| `Stores` | Id, BrandId, BrandName, City, District, StoreName, BrandSpecificStoreId, Latitude, Longitude, IsActive, CreatedAt |
 
-`BrandId`, `product_db.Brands.Id` ile eşleşen convention-based referans (FK değil). `BrandSpecificStoreId`, markanın kendi sitesi/API'sinde bu fiziksel mağazayı tanımlayan kod — scraper (Faz 2.4) bunu kullanacak.
+`BrandId`, `product_db.Brands.Id` ile eşleşen convention-based referans (FK değil). `BrandSpecificStoreId`, markanın kendi sitesi/API'sinde bu fiziksel mağazayı tanımlayan kod — scraper (Faz 2.4) bunu kullanacak. `Latitude`/`Longitude` (nullable) Faz 6.1'de Mango için eklendi — Mango'nun mağaza stok API'si mağaza ID'si değil enlem/boylam ile "yakındaki mağazalar" sorgusu yapıyor (bkz. `.claude/ARCHITECTURE.md` → Mango Scraper); Bershka/Zara'da her zaman `null`.
 
 **Seed data:** Bershka — 4 mağaza:
 
@@ -123,7 +130,18 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 
 > `BrandSpecificStoreId` değerleri Zara'nın kendi mağaza listesi sayfasından (`z-maazalar-st1404.html` → `window.zara.viewPayload.physicalStoresList`) okunan gerçek `physicalStoreId` değerleri (Faz 6.1) — `store-product-availability` endpoint'inin `physicalStoreIds` parametresine doğrudan geçiriliyor. Kentpark ve Forum Bornova, Bershka'nın seçtiği AVM'lerle birebir aynı (isim eşleşmesiyle doğrulandı). Detay için bkz. `.claude/ARCHITECTURE.md` → Zara Scraper.
 
-`GET /stores?brandId=&city=&district=` — tüm filtreler opsiyonel, `city`/`district` karşılaştırması case-insensitive, sadece `IsActive=true` kayıtlar döner. `GET /stores/{id}` (Faz 3.2) — tek mağaza, Subscription Service'in Stock Poller'ı `BrandSpecificStoreId` çözmek için kullanır.
+**Seed data:** Mango — 4 mağaza + koordinat (Faz 6.1, Bershka/Zara'nın mevcut 4 iliyle eşleşecek şekilde):
+
+| Şehir | İlçe | Mağaza | BrandSpecificStoreId | Latitude | Longitude |
+|---|---|---|---|---|---|
+| Istanbul | Kadikoy | Bağdat Caddesi (Suadiye) | `10389` | 40.959937009724 | 29.080951331352 |
+| Istanbul | Sisli | Cevahir AVM | `10277` | 41.06278401465 | 28.992832831243 |
+| Ankara | Cankaya | CEPA AVM | `10403` | 39.90971454185 | 32.778216907751 |
+| Izmir | Bornova | Forum Bornova | `10711` | 38.450381582438 | 27.209401193083 |
+
+> `BrandSpecificStoreId` ve koordinatlar, Mango'nun kendi `store-finder/v2/stores/stock` API'sinin döndürdüğü gerçek mağaza kayıtlarından (Faz 6.1) — bu API belirli bir mağaza ID'siyle değil enlem/boylam ile "yakındaki mağazalar" sorgusu yaptığı için, koordinatlar `productId`/`colorId` ile birlikte doğrudan sorguya geçiriliyor (bkz. `.claude/ARCHITECTURE.md` → Mango Scraper). Cevahir AVM ve Forum Bornova, Bershka/Zara'nın seçtiği AVM'lerle birebir aynı; Çankaya için Kentpark'ta Mango mağazası çıkmadığından en yakın gerçek eşleşme (CEPA AVM) kullanıldı.
+
+`GET /stores?brandId=&city=&district=` — tüm filtreler opsiyonel, `city`/`district` karşılaştırması case-insensitive, sadece `IsActive=true` kayıtlar döner. `GET /stores/{id}` (Faz 3.2) — tek mağaza, Subscription Service'in Stock Poller'ı `BrandSpecificStoreId` (ve Mango için `Latitude`/`Longitude`) çözmek için kullanır.
 
 ### subscription_db
 

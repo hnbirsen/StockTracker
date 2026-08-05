@@ -91,7 +91,7 @@ public class SearchOrchestratorService : ISearchOrchestratorService
 
                 foreach (var store in stores)
                 {
-                    await SendCheckStockCommandAsync(lookup, request.Size, store.Id, store.BrandSpecificStoreId, location.City, location.District);
+                    await SendCheckStockCommandAsync(lookup, request.Size, store.Id, store.BrandSpecificStoreId, location.City, location.District, store.Latitude, store.Longitude);
                 }
             }
         }
@@ -104,7 +104,7 @@ public class SearchOrchestratorService : ISearchOrchestratorService
         );
     }
 
-    private async Task SendCheckStockCommandAsync(ProductLookupResponse lookup, string size, Guid? storeId, string? brandSpecificStoreId, string? city, string? district)
+    private async Task SendCheckStockCommandAsync(ProductLookupResponse lookup, string size, Guid? storeId, string? brandSpecificStoreId, string? city, string? district, double? storeLatitude = null, double? storeLongitude = null)
     {
         var queueName = QueueNaming.StockCheckQueue(lookup.ScraperQueueName!);
         var sendEndpoint = await _sendEndpointProvider.GetSendEndpoint(new Uri($"queue:{queueName}"));
@@ -120,7 +120,9 @@ public class SearchOrchestratorService : ISearchOrchestratorService
             City: city,
             District: district,
             ProductUrl: lookup.ProductUrl,
-            RequestedAt: DateTime.UtcNow
+            RequestedAt: DateTime.UtcNow,
+            StoreLatitude: storeLatitude,
+            StoreLongitude: storeLongitude
         ));
 
         _logger.LogInformation(

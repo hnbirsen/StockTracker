@@ -11,6 +11,13 @@ namespace StockTracker.Shared.Contracts.Messages.V2;
 // gerçek partnumber/stok bilgisi — bu da sayfanın URL'sini gerektiriyor (bkz. BershkaStockApiClient).
 // ProductUrl, Product Service'in ProductBrandMap.ProductUrl alanından geliyor; henüz doldurulmamışsa
 // (örn. yalnızca regex format eşleşmesiyle çözülmüş ürünler) null kalır ve scraper Unknown döner.
+//
+// StoreLatitude/StoreLongitude (Faz 6.1, Mango Scraper): Mango'nun mağaza bazlı stok API'si
+// (store-finder/v2/stores/stock) Zara/Bershka'nın aksine belirli bir mağaza ID'siyle değil, bir
+// enlem/boylam etrafında "yakındaki mağazalar" araması yapıyor — sorgulanan mağazanın KENDİ
+// koordinatları verilirse o mağaza (mesafe ≈ 0) güvenilir şekilde sonuç listesinde çıkıyor (canlı
+// veriyle doğrulandı). Bu yüzden `Store` entity'sine (`store_db`) nullable Latitude/Longitude eklendi;
+// yalnızca Mango için dolu, diğer markalar için null kalır (`BrandSpecificStoreId` zaten yeterli).
 public record CheckStockCommand(
     Guid CommandId,
     string ProductCode,
@@ -22,5 +29,7 @@ public record CheckStockCommand(
     string? City,
     string? District,
     string? ProductUrl,
-    DateTime RequestedAt
+    DateTime RequestedAt,
+    double? StoreLatitude = null,
+    double? StoreLongitude = null
 );

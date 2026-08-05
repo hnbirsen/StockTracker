@@ -15,6 +15,12 @@ public class Store
     // Markanın kendi sitesi/API'sinde bu fiziksel mağazayı tanımlayan kod — scraper bunu kullanır.
     public string BrandSpecificStoreId { get; set; } = string.Empty;
 
+    // Yalnızca Mango için dolu (Faz 6.1) — Mango'nun mağaza stok API'si mağaza ID'si değil enlem/boylam
+    // ile "yakındaki mağazalar" sorgusu yapıyor; mağazanın KENDİ koordinatları verilirse güvenilir şekilde
+    // sonuçta çıkıyor (bkz. Messages.V2.CheckStockCommand üstündeki not). Diğer markalarda null.
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

@@ -33,7 +33,7 @@ public class StoreReferenceService : IStoreReferenceService
             query = query.Where(s => s.District.ToLower() == district.Trim().ToLower());
 
         return await query
-            .Select(s => new StoreDto(s.Id, s.BrandId, s.BrandName, s.City, s.District, s.StoreName, s.BrandSpecificStoreId))
+            .Select(s => new StoreDto(s.Id, s.BrandId, s.BrandName, s.City, s.District, s.StoreName, s.BrandSpecificStoreId, s.Latitude, s.Longitude))
             .ToListAsync();
     }
 
@@ -41,7 +41,7 @@ public class StoreReferenceService : IStoreReferenceService
     {
         return await _db.Stores
             .Where(s => s.Id == id && s.IsActive)
-            .Select(s => new StoreDto(s.Id, s.BrandId, s.BrandName, s.City, s.District, s.StoreName, s.BrandSpecificStoreId))
+            .Select(s => new StoreDto(s.Id, s.BrandId, s.BrandName, s.City, s.District, s.StoreName, s.BrandSpecificStoreId, s.Latitude, s.Longitude))
             .FirstOrDefaultAsync();
     }
 }

@@ -4,6 +4,7 @@
   <Project Path="StockTracker.Billing/StockTracker.Billing.csproj" />
   <Project Path="StockTracker.BershkaScraper/StockTracker.BershkaScraper.csproj" />
   <Project Path="StockTracker.ZaraScraper/StockTracker.ZaraScraper.csproj" />
+  <Project Path="StockTracker.MangoScraper/StockTracker.MangoScraper.csproj" />
   <Project Path="StockTracker.BrandDetection/StockTracker.BrandDetection.csproj" />
   <Project Path="StockTracker.Gateway/StockTracker.Gateway.csproj" />
   <Project Path="StockTracker.Identity/StockTracker.Identity.csproj" />
@@ -19,6 +20,7 @@
   <Project Path="tests/StockTracker.StoreReference.Tests/StockTracker.StoreReference.Tests.csproj" />
   <Project Path="tests/StockTracker.BershkaScraper.Tests/StockTracker.BershkaScraper.Tests.csproj" />
   <Project Path="tests/StockTracker.ZaraScraper.Tests/StockTracker.ZaraScraper.Tests.csproj" />
+  <Project Path="tests/StockTracker.MangoScraper.Tests/StockTracker.MangoScraper.Tests.csproj" />
   <Project Path="tests/StockTracker.Shared.Scraping.Tests/StockTracker.Shared.Scraping.Tests.csproj" />
   <Project Path="tests/StockTracker.Subscription.Tests/StockTracker.Subscription.Tests.csproj" />
   <Project Path="tests/StockTracker.Notification.Tests/StockTracker.Notification.Tests.csproj" />

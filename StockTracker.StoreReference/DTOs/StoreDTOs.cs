@@ -7,5 +7,7 @@ public record StoreDto(
     string City,
     string District,
     string? StoreName,
-    string BrandSpecificStoreId
+    string BrandSpecificStoreId,
+    double? Latitude = null,
+    double? Longitude = null
 );

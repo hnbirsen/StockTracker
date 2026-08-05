@@ -34,8 +34,17 @@ public class StoreReferenceDbContext : DbContext
         // seçimiyle birebir eşleşecek şekilde seçildi: Kentpark (Çankaya) ve Forum Bornova (Bornova) isim
         // olarak Bershka'nınkiyle birebir aynı AVM; Kadıköy/Şişli için ilçe sınırları içindeki gerçek Zara
         // mağazaları kullanıldı.
+        // Mango mağaza listesi (Faz 6.1) — BrandSpecificStoreId, Mango'nun kendi
+        // `store-finder/v2/stores/stock` API'sinden dönen GERÇEK mağaza ID'leri. Bershka/Zara'nın aksine
+        // bu API belirli bir mağaza ID'siyle değil enlem/boylam ile "yakındaki mağazalar" sorgusu yapıyor
+        // (bkz. Messages.V2.CheckStockCommand üstündeki not) — bu yüzden Latitude/Longitude de dolduruldu
+        // (her mağazanın API'nin kendi döndürdüğü gerçek koordinatları). Şişli/Bornova isim olarak
+        // Bershka/Zara'nınkiyle birebir aynı AVM (Cevahir, Forum Bornova); Kadıköy için Bağdat Caddesi
+        // üzerindeki gerçek Mango mağazası, Çankaya için CEPA AVM (Kentpark'ta Mango mağazası çıkmadı,
+        // en yakın gerçek eşleşme CEPA).
         var bershkaId = Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
         var zaraId = Guid.Parse("b2c3d4e5-f6a7-8901-bcde-f12345678901");
+        var mangoId = Guid.Parse("d4e5f6a7-b8c9-0123-defa-234567890123");
         var seedCreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         modelBuilder.Entity<Store>().HasData(
@@ -132,6 +141,62 @@ public class StoreReferenceDbContext : DbContext
                 District = "Bornova",
                 StoreName = "Forum Bornova",
                 BrandSpecificStoreId = "3643",
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d3333333-0000-0000-0000-000000000001"),
+                BrandId = mangoId,
+                BrandName = "Mango",
+                City = "Istanbul",
+                District = "Kadikoy",
+                StoreName = "Bağdat Caddesi (Suadiye)",
+                BrandSpecificStoreId = "10389",
+                Latitude = 40.959937009724,
+                Longitude = 29.080951331352,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d3333333-0000-0000-0000-000000000002"),
+                BrandId = mangoId,
+                BrandName = "Mango",
+                City = "Istanbul",
+                District = "Sisli",
+                StoreName = "Cevahir AVM",
+                BrandSpecificStoreId = "10277",
+                Latitude = 41.06278401465,
+                Longitude = 28.992832831243,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d3333333-0000-0000-0000-000000000003"),
+                BrandId = mangoId,
+                BrandName = "Mango",
+                City = "Ankara",
+                District = "Cankaya",
+                StoreName = "CEPA AVM",
+                BrandSpecificStoreId = "10403",
+                Latitude = 39.90971454185,
+                Longitude = 32.778216907751,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d3333333-0000-0000-0000-000000000004"),
+                BrandId = mangoId,
+                BrandName = "Mango",
+                City = "Izmir",
+                District = "Bornova",
+                StoreName = "Forum Bornova",
+                BrandSpecificStoreId = "10711",
+                Latitude = 38.450381582438,
+                Longitude = 27.209401193083,
                 IsActive = true,
                 CreatedAt = seedCreatedAt
             }

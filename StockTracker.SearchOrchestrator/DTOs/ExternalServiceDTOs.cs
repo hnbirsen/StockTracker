@@ -28,10 +28,13 @@ public record ResolveResponse(
 );
 
 // Store Reference Service GET /stores yanıtının ihtiyaç duyulan alt kümesi.
+// Latitude/Longitude yalnızca Mango için dolu (bkz. Shared.Contracts.Messages.V2.CheckStockCommand üstündeki not).
 public record StoreDto(
     Guid Id,
     Guid BrandId,
     string City,
     string District,
-    string BrandSpecificStoreId
+    string BrandSpecificStoreId,
+    double? Latitude = null,
+    double? Longitude = null
 );

@@ -66,6 +66,11 @@ BERSHKA_STOCK_API_BASE_URL=https://api.inditex.com
 # hem online hem mağaza stoğu doğrudan www.zara.com'a karşı Playwright ile okunuyor (bkz.
 # .claude/ARCHITECTURE.md > Zara Scraper). REDIS_CONNECTION ve yukarıdaki paylaşılan RabbitMQ
 # değişkenleri zaten yeterli.
+
+# Mango Scraper — ek bir env var GEREKMİYOR ve Playwright/Chrome kurulumu da GEREKMİYOR. Ne PDP
+# sayfası ne de mağaza stok API'si (api.shop.mango.com) bot korumalı (bkz. .claude/ARCHITECTURE.md >
+# Mango Scraper) — düz, dayanıklılık politikalı HttpClient yeterli. REDIS_CONNECTION ve yukarıdaki
+# paylaşılan RabbitMQ değişkenleri zaten yeterli.
 ```
 
 `.env` dosyası `.gitignore`'da olmalı — repoya commit'lenmez. Sadece `.env example` (değersiz, key listesi) repoda tutulur.
@@ -111,6 +116,7 @@ dotnet run --project StockTracker.Billing          # :5007
 dotnet run --project StockTracker.Notification     # :5008
 dotnet run --project StockTracker.BershkaScraper   # :5009
 dotnet run --project StockTracker.ZaraScraper      # :5010
+dotnet run --project StockTracker.MangoScraper     # :5011 (Playwright/Chrome kurulumu gerekmez)
 ```
 
 Sadece belirli bir servis üzerinde çalışıyorsan, altyapıyı ayağa kaldırıp o servisi IDE'den debug edebilirsin:

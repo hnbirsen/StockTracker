@@ -67,7 +67,7 @@ Bunlar veri değil, "prodüksiyona geçmeden önce yapılmalı" işleri — ayr�
 - [ ] Gerçek cihaz test erişimi (iOS + Android).
 - [ ] FCM push token kayıt akışının yazılması — yukarıdaki `FCM_SERVER_KEY`'i gerçek anlamlı kılan asıl iş.
 
-## Faz 6.1 — Yeni Marka Onboarding (Zara, Pull&Bear)
+## Faz 6.1 — Yeni Marka Onboarding (Zara, Mango, Pull&Bear)
 
 - [x] Zara için regex/site-search keşfi + gerçek site erişimiyle canlı doğrulama — tamamlandı (bkz. `.claude/ARCHITECTURE.md` > Zara Scraper). Kod tarafında bekleyen bir girdi yok, ek `.env` değişkeni gerekmiyor.
 - [x] **10 ürün × farklı beden × farklı il/ilçe canlı testi** — tamamlandı (kullanıcı talebiyle, gerçek Chrome tarayıcı oturumu üzerinden üretim mantığının birebir aynısı test edildi; bu ortamda gerçek Chrome kanalı kurulu olmadığı için derlenmiş servis değil, aynı endpoint/parsing mantığı doğrulandı). 3 gerçek bulgu koda yansıtıldı: `"low_on_stock"` durumu artık stokta sayılıyor, `productId` artık öncelikle PDP'nin `colors[].productId` alanından çözülüyor (URL `v1`'e daha az bağımlı), ve Akamai'nin hız-bazlı bloklamasının **kalıcı** olduğu (basit bir bekleme ile geçmediği) doğrulandı. Detay: `.claude/ARCHITECTURE.md` > Zara Scraper.
@@ -79,7 +79,10 @@ Bunlar veri değil, "prodüksiyona geçmeden önce yapılmalı" işleri — ayr�
   - Sonuç: engelleme muhtemelen Akamai'nin herhangi bir tarayıcı-otomasyon aracını (ChromeDriver'ın enjekte ettiği `$cdc_` değişkenleri, headless Chrome'a özgü sinyaller, `navigator.webdriver` vb.) tespit etmesinden kaynaklanıyor — IP/ağ değil, otomasyonun KENDİSİ tespit ediliyor. **Bu nedenle Faz 7'deki proxy/IP rotasyonu bu sorunu ÇÖZMEYECEK.**
   - Daha derin çözümler (canvas fingerprint sahteciliği, "undetected-chromedriver" tarzı CDP/WebDriver izi gizleme yamaları) kasıtlı olarak denenmedi — bunlar `.claude/ARCHITECTURE.md`'de zaten bilinçli olarak kapsam dışı bırakılan "bot-tespitini aktif atlatma" sınırını aşar.
   - **Mevcut durum kabul edildi**: kod güvenli davranıyor (403 → `Unknown`, exception yok), online stok sorgusu (mağaza sorgusundan farklı olarak) sorunsuz çalışıyor. Zara'nın mağaza bazlı stok özelliği şu an için bilinen, kalıcı bir kısıtlama — gelecekte yalnızca tamamen farklı bir mimari (ör. gerçek bir kullanıcı tarayıcısında çalışan bir uzantı üzerinden veri toplama) bu özelliği etkinleştirebilir, ki bu ayrı ve büyük bir faz gerektirir.
-- [ ] Pull&Bear için regex/site-search keşfi, gerçek site erişimiyle canlı doğrulama (Bershka/Zara'da yapıldığı gibi).
+- [x] **Mango için regex/site-search keşfi + gerçek site erişimiyle uçtan uca canlı doğrulama** — tamamlandı (bkz. `.claude/ARCHITECTURE.md` > Mango Scraper). Zara'nın aksine Mango'da bot koruması yok, bu yüzden derlenmiş üretim kodu (`MangoPdpFetcher`+`MangoStockApiClient`) bu ortamda doğrudan gerçek shop.mango.com'a karşı çalıştırılıp doğrulanabildi (RabbitMQ katmanı hariç) — online stok 4/4, mağaza sorgusu 2/2 doğru gerçek sonuç. Kod tarafında bekleyen bir girdi yok, ek `.env` değişkeni gerekmiyor.
+- [ ] **Mango için RabbitMQ üzerinden tam uçtan uca smoke-test** — hâlâ eksik olan tek adım: `dotnet run --project StockTracker.MangoScraper` ile TAM servisi (consumer dahil) ayağa kaldırıp RabbitMQ'ya elle bir `CheckStockCommand` (V2, gerçek bir Mango `ProductUrl`'iyle) gönderip dönen `StockResultEvent`'in doğruluğu kontrol edilmeli.
+- [ ] **Mango ürün kodu formatı — fiziksel etiket doğrulaması bekliyor**: `^\d{8}/\d{2}$` deseni gerçek API verisiyle (temel 8 haneli referans + `colors[].id`) doğrulandı ama fiziksel üründeki TAM görünen format (ayraç dahil mi, hangi ayraç) henüz gerçek bir Mango ürün etiketiyle çapraz doğrulanmadı — Medium confidence bu yüzden. Gerçek bir mağazadan/kullanıcıdan bir ürün etiketi fotoğrafı/verisi gelirse High'a çıkarılabilir.
+- [ ] Pull&Bear için regex/site-search keşfi, gerçek site erişimiyle canlı doğrulama (Bershka/Zara/Mango'da yapıldığı gibi).
 
 ## Faz 7 — Proxy/IP Rotasyonu (bilinçli olarak ertelendi)
 
