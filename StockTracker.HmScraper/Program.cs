@@ -5,6 +5,7 @@ using StockTracker.HmScraper.Services;
 using StockTracker.Shared.Contracts.Configuration;
 using StockTracker.Shared.Contracts.Messaging;
 using StockTracker.Shared.Scraping.Health;
+using StockTracker.Shared.Scraping.Http;
 
 EnvFileLoader.LoadFromNearestEnvFile();
 
@@ -20,11 +21,27 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Conn
 
 builder.Services.AddSingleton<IScraperHealthLogService, ScraperHealthLogService>();
 
-// H&M, Zara gibi Akamai korumalı (PDP + mağaza stok API'si ikisi de) — bu yüzden Mango'nun aksine
-// Playwright/gerçek Chrome kanalı gerekiyor (bkz. .claude/ARCHITECTURE.md > H&M Scraper).
+// PDP hâlâ Akamai korumalı — beden adı↔kod eşlemesini okumak için Playwright/gerçek Chrome kanalı gerekiyor
+// (bkz. .claude/ARCHITECTURE.md > H&M Scraper). Bu artık yalnızca ürün başına ~günde bir kez çalışıyor
+// (24 saatlik Redis cache) — online stok kontrolünün kendisi Playwright GEREKTİRMİYOR (bkz. altta).
 builder.Services.AddSingleton<IHmPdpFetcher, PlaywrightHmFetcher>();
 
-builder.Services.AddScoped<IHmStockApiClient, HmStockApiClient>();
+// Online stok API'si (`ofg.hm.com/pdh-availability/...`) AYRI bir domain'de ve korumasız (kullanıcının
+// paylaştığı gerçek curl istekleriyle doğrulandı — bkz. HmStockApiClient üstündeki not) — düz, dayanıklılık
+// politikalı bir HttpClient ile çağrılıyor.
+builder.Services.AddTransient<ScraperEtiquetteHandler>();
+builder.Services.AddTransient(_ => new HostRateLimitingHandler(requestsPerMinute: 60));
+
+IHttpClientBuilder ApplyResiliencePolicies(IHttpClientBuilder httpClientBuilder) => httpClientBuilder
+    .AddHttpMessageHandler<HostRateLimitingHandler>()
+    .AddHttpMessageHandler<ScraperEtiquetteHandler>()
+    .AddScraperResilience();
+
+ApplyResiliencePolicies(builder.Services.AddHttpClient<IHmStockApiClient, HmStockApiClient>(client =>
+{
+    client.BaseAddress = new Uri("https://ofg.hm.com");
+}));
+
 builder.Services.AddScoped<IHmStockCheckService, HmStockCheckService>();
 
 builder.Services.AddStockTrackerRabbitMq(

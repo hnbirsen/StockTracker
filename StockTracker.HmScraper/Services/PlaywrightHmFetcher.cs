@@ -16,10 +16,12 @@ namespace StockTracker.HmScraper.Services;
 //      aynı çözümün geçerli olduğu varsayılıyor).
 //   2. PDP verisi `__NEXT_DATA__` içinde SSR ile gömülü (Zara/Bershka'nın Vue-hydration/component-tree
 //      beklentisinden farklı, Next.js'in klasik Pages Router mekanizması) — sayfa DOMContentLoaded olur
-//      olmaz zaten mevcut, uzun bir hydration beklemesine gerek yok.
-//   3. Mağaza stok endpoint'i (`/tr_tr/sis/tr/...`) da PDP kadar Akamai korumalı (canlı doğrulandı: `curl`
-//      403 alıyor) — bu yüzden Zara'daki gibi HTTPClient DEĞİL, PDP'ye yapılan navigasyonla kurulan
-//      tarayıcı oturumunun çerezleriyle sayfa içinden (`fetch`) çağrılıyor. Bu endpoint ayrıca
+//      olmaz zaten mevcut, uzun bir hydration beklemesine gerek yok. Bu fetcher artık YALNIZCA beden
+//      adı↔kod eşlemesini okuyor — online stok `ofg.hm.com`'dan geliyor (bkz. IHmPdpFetcher, HmStockApiClient).
+//   3. Mağaza stok endpoint'i (`/tr_tr/sis/tr/...`) PDP ile aynı `www2.hm.com` domain'inde — kullanıcının
+//      paylaştığı gerçek `curl` ile bu endpoint'in çerezsiz (`credentials:'omit'`) bile 200 döndüğü
+//      doğrulandı, ama temkinli olarak Playwright üzerinden (Akamai'yi geçmiş bir tarayıcı oturumunun
+//      içinden) çağrılmaya devam ediliyor — bkz. IHmPdpFetcher üstündeki yorum. Bu endpoint ayrıca
 //      `Content-Type: application/json` header'ı OLMADAN `415 Unsupported Media Type` döndürüyor (canlı
 //      doğrulandı) — bu yüzden script bu header'ı açıkça ekliyor.
 //   4. Zara'da bulunan hıza dayalı (velocity-based) Akamai bloklaması H&M için AYRICA test edilmedi, ama
@@ -34,6 +36,9 @@ public class PlaywrightHmFetcher : IHmPdpFetcher, IAsyncDisposable
 
     private static readonly TimeSpan MinStoreQueryInterval = TimeSpan.FromSeconds(6);
 
+    // Yalnızca beden adı ↔ kod eşlemesini okur — stok/availability artık `ofg.hm.com`'dan geldiği için
+    // (bkz. IHmPdpFetcher üstündeki yorum) burada TAŞINMIYOR, bu sayede bu verinin uzun süreli önbelleğe
+    // alınması (24 saat) stok bilgisini bayatlatma riski taşımıyor.
     private const string ExtractSizesScript = """
         () => {
           const el = document.getElementById('__NEXT_DATA__');
@@ -45,19 +50,13 @@ public class PlaywrightHmFetcher : IHmPdpFetcher, IAsyncDisposable
           if (!ppp) return null;
 
           const articleCode = ppp.articleCode;
-          const ssrAvail = ppp.ssrAvailability || {};
-          const availSet = new Set(ssrAvail.availability || []);
-          const fewSet = new Set(ssrAvail.fewPieceLeft || []);
-
           const variation = ppp.aemData?.productArticleDetails?.variations?.[articleCode];
           const sizes = variation?.sizes || [];
           if (sizes.length === 0) return null;
 
           const flat = sizes.map(s => ({
             Name: s.name,
-            SizeCode: s.size,
-            Available: availSet.has(s.sizeCode),
-            FewPieceLeft: fewSet.has(s.sizeCode)
+            SizeCode: s.size
           }));
 
           return JSON.stringify(flat);

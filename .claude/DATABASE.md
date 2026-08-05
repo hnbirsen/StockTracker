@@ -75,6 +75,10 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 
 `mango:pdp-sizes:{productUrl}` → ürün sayfasının Next.js RSC akışından okunan tüm bedenlerin listesi (`Name`, `Available`, `ColorId`), 15 dakikalık TTL — yalnızca ONLINE stok için. Mağaza bazlı stok (`store-finder/v2/stores/stock`) hiç önbelleklenmiyor. Zara'dan farklı olarak bu scraper'da Playwright/Akamai bloklaması YOK (bkz. `.claude/ARCHITECTURE.md` → Mango Scraper) — Redis önbelleği yalnızca gereksiz tekrar isteklerden kaçınmak için, bot tespitinden kaçınmak için değil.
 
+### H&M Scraper — Redis beden-kodu cache-aside, uzun TTL (kendi veritabanı yok)
+
+`hm:pdp-sizecodes:{productUrl}` → ürün sayfasının `__NEXT_DATA__`'sından okunan beden adı↔kod eşlemesi (`Name`, `SizeCode`), **24 saatlik TTL** — diğer tüm scraper'ların 15dk'lık PDP cache'inden çok daha uzun, çünkü bu veri ürün başına neredeyse hiç değişmiyor (stok gibi anlık değil, ürün sayfasının kalıcı içeriği). ⚠️ **Mimari düzeltme**: online stok artık BU önbellekte YOK — kullanıcının paylaştığı gerçek `curl` istekleriyle bulunan, `www2.hm.com`'un Akamai korumasının dışındaki ayrı bir domain (`ofg.hm.com/pdh-availability/v1/product/tr/availability/{productId}`) her zaman canlı sorgulanıyor (hiç önbelleklenmiyor — korumasız ve ucuz olduğu için). Mağaza stok API'si de (`/sis/tr/...`) hiç önbelleklenmiyor. Detay: `.claude/ARCHITECTURE.md` → H&M Scraper.
+
 ### Massimo Dutti Scraper — Redis PDP cache-aside (kendi veritabanı yok)
 
 `massimodutti:pdp-sizes:{productUrl}` → ürün sayfasının `#mdfrontw-state` Angular SSR state'inden okunan tüm bedenlerin listesi (`Name`, `ColorId`, `CatEntryId`, `MastersSizeId`, `IsBuyable`, `BackSoon`), 15 dakikalık TTL — online stok İÇİN, ama aynı zamanda mağaza stok sorgusunun ihtiyaç duyduğu `CatEntryId`/`MastersSizeId` değerlerini de taşıyor. Mağaza stok API'si (`api/storefront/1/stores/.../products/.../available-sizes`) hiç önbelleklenmiyor — Akamai korumasız ve ucuz olduğu için her zaman canlı sorgulanıyor (bkz. `.claude/ARCHITECTURE.md` → Massimo Dutti Scraper).

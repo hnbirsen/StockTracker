@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using StackExchange.Redis;
@@ -6,41 +8,50 @@ using StockTracker.Shared.Scraping.Health;
 namespace StockTracker.HmScraper.Services;
 
 // Gerçek H&M entegrasyonu — Faz 6.1'de canlı www2.hm.com üzerinden keşfedildi (bkz. .claude/ARCHITECTURE.md
-// > H&M Scraper). Zara'ya en yakın mimari: hem PDP hem mağaza stok API'si Akamai korumalı (canlı doğrulandı:
-// `curl` ikisinde de Zara'yla birebir aynı "Access Denied" sayfasını dönüyor) — bu yüzden Playwright
-// (`IHmPdpFetcher`) kullanılıyor, Mango'daki gibi düz HttpClient DEĞİL.
+// > H&M Scraper). ⚠️ Online stok mimarisi DÜZELTİLDİ — kullanıcının paylaştığı 3 gerçek `curl` isteği,
+// Stradivarius'takine benzer bir gözden kaçan API'yi ortaya çıkardı:
 //
-//   - Online stok: PDP'nin `__NEXT_DATA__` içindeki `ssrAvailability.availability`/`fewPieceLeft`
-//     dizilerinden (tam 13 haneli SKU listesi) okunuyor — Bershka/Zara'nın string enum'larının aksine
-//     doğrudan bir "bu SKU'lar stokta" listesi, yorumlamaya gerek yok.
-//   - Mağaza stoğu: Mango'nun "belirli mağaza ID'si yerine enlem/boylam" modeliyle AYNI —
-//     `/tr_tr/sis/tr/{productId}/{artId}?latitude=...&longitude=...` — ama yanıt ZARA/MANGO'DAN FARKLI
-//     olarak SEYREK (sparse) DEĞİL: yarıçap içindeki TÜM mağazalar (stoksuz olanlar dahil) açık bir
-//     `traffLightInd` (R=stokta yok, Y=birkaç tane kaldı, G=stokta — canlı doğrulandı: R ve G çok, Y
-//     UI'nin kendi renk lejantında görülüyor ama bu turda canlı bir örneğine rastlanmadı) ile dönüyor.
-//     Bu yüzden hedef mağaza yanıtta HİÇ yoksa (Zara'nın "yok=OutOfStock" kuralının AKSİNE) Unknown
-//     dönülüyor — çünkü H&M'de "mağaza var ama listede yok" durumu hiç gözlemlenmedi, muhtemelen bir
-//     sorgu/yarıçap sorununa işaret eder, "stok yok" anlamına gelmez.
-//   - Mağaza sorgusu, PDP'den okunan `SizeCode`'a ihtiyaç duyuyor (Bershka'nın partnumber'ı gibi) çünkü
-//     `/sis/` yanıtındaki beden kayıtları isim değil ("XS") 3 haneli kod ("002") kullanıyor.
+//   - Online stok: ARTIK PDP'nin `__NEXT_DATA__`'sından (Playwright) DEĞİL, tamamen AYRI ve KORUMASIZ bir
+//     domain'den — `GET ofg.hm.com/pdh-availability/v1/product/tr/availability/{productId}` — okunuyor.
+//     Bu domain `www2.hm.com`'un Akamai korumasının TAMAMEN DIŞINDA (canlı doğrulandı: `curl` ve
+//     çerezsiz/`credentials:'omit'` `fetch` ile bile 200 dönüyor) — Bershka'nın ayrı `api.inditex.com`'u,
+//     Beymen'in `sf-api`'si ile aynı "ayrı domain = korumasız" deseni. Yanıt `{"availability":[13 haneli
+//     tam SKU'lar],"fewPieceLeft":[bunun alt kümesi]}` — PDP'nin `__NEXT_DATA__.ssrAvailability`'siyle
+//     BİREBİR AYNI veri (bu API, Next.js sunucusunun PDP'yi oluştururken zaten çağırdığı arka uç). Tam SKU
+//     = productId(7) + artId(3) + sizeCode(3) — 13 hane.
+//   - Beden adı↔kod eşlemesi: hâlâ Playwright gerektiriyor (`IHmPdpFetcher`, `aemData.productArticleDetails.
+//     variations[articleCode].sizes[]`) — ama bu veri ürün başına neredeyse hiç değişmediği için (stok gibi
+//     anlık değil, ürün sayfasının kalıcı içeriği) 24 saat önbelleğe alınıyor, Playwright kullanım sıklığını
+//     "her stok kontrolünde bir kez" yerine "ürün başına ~günde bir kez"e indiriyor.
+//   - Mağaza stoğu: DEĞİŞMEDİ — `/tr_tr/sis/tr/{productId}/{artId}?latitude=...&longitude=...` hâlâ
+//     Playwright üzerinden (Akamai'yi geçmiş bir oturumdan) çağrılıyor; bu endpoint AYNI `www2.hm.com`
+//     domain'inde olduğu için (çerezsiz çalıştığı doğrulanmış olsa da, Akamai'nin asıl ayırt ettiği şey
+//     istemci TLS/tarayıcı parmak izi — bir .NET `HttpClient` bunu taklit edemeyebilir) temkinli davranıldı.
+//     Mango'yla aynı model: mağaza ID'si değil enlem/boylam ile "yakındaki mağazalar" sorgusu, yanıt SEYREK
+//     DEĞİL (Zara'nın aksine tüm yakın mağazalar `traffLightInd` R/Y/G ile dönüyor).
 public class HmStockApiClient : IHmStockApiClient
 {
     private const string ScraperName = "hm";
 
-    private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(15);
+    // Beden adı↔kod eşlemesi ürün başına neredeyse hiç değişmiyor — stok gibi anlık veri DEĞİL, bu yüzden
+    // diğer scraper'ların 15dk'lık PDP cache'inden çok daha uzun (24 saat) tutulabiliyor.
+    private static readonly TimeSpan SizeMapCacheTtl = TimeSpan.FromHours(24);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    private readonly HttpClient _availabilityApiClient;
     private readonly IHmPdpFetcher _pdpFetcher;
     private readonly IConnectionMultiplexer _redis;
     private readonly IScraperHealthLogService _healthLog;
     private readonly ILogger<HmStockApiClient> _logger;
 
     public HmStockApiClient(
+        HttpClient httpClient,
         IHmPdpFetcher pdpFetcher,
         IConnectionMultiplexer redis,
         IScraperHealthLogService healthLog,
         ILogger<HmStockApiClient> logger)
     {
+        _availabilityApiClient = httpClient;
         _pdpFetcher = pdpFetcher;
         _redis = redis;
         _healthLog = healthLog;
@@ -49,10 +60,52 @@ public class HmStockApiClient : IHmStockApiClient
 
     public async Task<StockCheckResult?> CheckOnlineStockAsync(string productCode, string size, string productUrl, CancellationToken cancellationToken)
     {
+        if (!TrySplitProductCode(productCode, out var productId, out var artId))
+        {
+            _logger.LogWarning("productCode beklenen \"ürün/renk\" formatında değil: {ProductCode}", productCode);
+            return null;
+        }
+
         var sizeEntry = await ResolveSizeEntryAsync(size, productUrl, cancellationToken);
-        // Online kontrolde H&M'in kendi `fewPieceLeft` bayrağı IsLastUnit'e taşınıyor — Quantity burada da
-        // hiç yok (bkz. sınıf üstündeki yorum), ayrıca API'nin kendisi de sayısal bir online miktar vermiyor.
-        return sizeEntry is null ? null : new StockCheckResult(sizeEntry.Available, null, sizeEntry.FewPieceLeft);
+        if (sizeEntry is null) return null;
+
+        var stopwatch = Stopwatch.StartNew();
+        var fullSku = productId + artId + sizeEntry.SizeCode;
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _availabilityApiClient.GetAsync($"/pdh-availability/v1/product/tr/availability/{productId}", cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "H&M online stok API'sine (productId={ProductId}) ulaşılamadı.", productId);
+            await _healthLog.LogAttemptAsync(ScraperName, "PdhAvailability", success: false, null, ex.Message, productId, (int)stopwatch.ElapsedMilliseconds, cancellationToken);
+            return null;
+        }
+
+        await _healthLog.LogAttemptAsync(
+            ScraperName, "PdhAvailability", response.IsSuccessStatusCode, (int)response.StatusCode,
+            errorMessage: response.IsSuccessStatusCode ? null : $"HTTP {(int)response.StatusCode}",
+            productId, (int)stopwatch.ElapsedMilliseconds, cancellationToken);
+
+        if (!response.IsSuccessStatusCode) return null;
+
+        PdhAvailabilityDto? availability;
+        try
+        {
+            availability = await response.Content.ReadFromJsonAsync<PdhAvailabilityDto>(JsonOptions, cancellationToken);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "H&M online stok yanıtı ayrıştırılamadı (productId={ProductId}).", productId);
+            return null;
+        }
+
+        var isAvailable = availability?.Availability?.Contains(fullSku) ?? false;
+        var isFewPieceLeft = availability?.FewPieceLeft?.Contains(fullSku) ?? false;
+
+        return new StockCheckResult(isAvailable, null, isFewPieceLeft);
     }
 
     public async Task<StockCheckResult?> CheckStoreStockAsync(string productCode, string size, string brandSpecificStoreId, double storeLatitude, double storeLongitude, string productUrl, CancellationToken cancellationToken)
@@ -95,8 +148,8 @@ public class HmStockApiClient : IHmStockApiClient
         var inStock = !string.Equals(sizeStatus.TrafficLightInd, "R", StringComparison.OrdinalIgnoreCase);
         var isLastUnit = string.Equals(sizeStatus.TrafficLightInd, "Y", StringComparison.OrdinalIgnoreCase);
 
-        // Quantity kasıtlı olarak taşınmıyor — bkz. sınıf üstündeki ve StockCheckResult üstündeki yorum
-        // (`avaiQty` gerçek bir miktar değil, kabaca gruplanmış bir değer).
+        // Quantity kasıtlı olarak taşınmıyor — `avaiQty` gerçek bir miktar değil, kabaca gruplanmış bir
+        // değer (yalnızca 0/1000/2000/3000 gözlemlendi).
         return new StockCheckResult(inStock, null, isLastUnit);
     }
 
@@ -132,7 +185,7 @@ public class HmStockApiClient : IHmStockApiClient
     private async Task<List<SizeEntry>> GetProductSizesAsync(string productUrl, CancellationToken cancellationToken)
     {
         var db = _redis.GetDatabase();
-        var cacheKey = $"hm:pdp-sizes:{productUrl}";
+        var cacheKey = $"hm:pdp-sizecodes:{productUrl}";
 
         var cached = await db.StringGetAsync(cacheKey);
         if (cached.HasValue)
@@ -143,7 +196,7 @@ public class HmStockApiClient : IHmStockApiClient
             }
             catch (JsonException ex)
             {
-                _logger.LogWarning(ex, "Redis'teki PDP cache verisi ayrıştırılamadı, yeniden çekiliyor ({Url}).", productUrl);
+                _logger.LogWarning(ex, "Redis'teki beden-kodu cache verisi ayrıştırılamadı, yeniden çekiliyor ({Url}).", productUrl);
             }
         }
 
@@ -163,13 +216,17 @@ public class HmStockApiClient : IHmStockApiClient
 
         if (sizes.Count > 0)
         {
-            await db.StringSetAsync(cacheKey, sizesJson, CacheTtl);
+            await db.StringSetAsync(cacheKey, sizesJson, SizeMapCacheTtl);
         }
 
         return sizes;
     }
 
-    private record SizeEntry(string Name, string SizeCode, bool Available, bool FewPieceLeft);
+    private record SizeEntry(string Name, string SizeCode);
+
+    private record PdhAvailabilityDto(
+        [property: JsonPropertyName("availability")] List<string>? Availability,
+        [property: JsonPropertyName("fewPieceLeft")] List<string>? FewPieceLeft);
 
     private record StoreFinderResponseDto(
         [property: JsonPropertyName("stores")] List<StoreEntryDto>? Stores);

@@ -1,3 +1,4 @@
+using System.Net;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -11,15 +12,20 @@ public class HmStockApiClientTests
 {
     private const string ProductUrl = "https://www2.hm.com/tr_tr/productpage.1351887001.html";
 
-    private static string SizeJson(params (string Name, string SizeCode, bool Available, bool FewPieceLeft)[] entries) =>
+    private static string SizeJson(params (string Name, string SizeCode)[] entries) =>
         "[" + string.Join(",", entries.Select(e =>
-            $"{{\"Name\":\"{e.Name}\",\"SizeCode\":\"{e.SizeCode}\",\"Available\":{(e.Available ? "true" : "false")},\"FewPieceLeft\":{(e.FewPieceLeft ? "true" : "false")}}}")) + "]";
+            $"{{\"Name\":\"{e.Name}\",\"SizeCode\":\"{e.SizeCode}\"}}")) + "]";
 
-    private static (HmStockApiClient Sut, Mock<IHmPdpFetcher> PdpFetcher, Mock<IDatabase> RedisDb) CreateSut(
+    private static (HmStockApiClient Sut, FakeHttpMessageHandler AvailabilityHandler, Mock<IHmPdpFetcher> PdpFetcher, Mock<IDatabase> RedisDb) CreateSut(
+        Func<HttpRequestMessage, HttpResponseMessage>? availabilityResponder = null,
         string? pdpSizesJson = null,
         RedisValue cachedValue = default,
         string? storeAvailabilityJson = null)
     {
+        var availabilityHandler = new FakeHttpMessageHandler(
+            availabilityResponder ?? (_ => throw new InvalidOperationException("Online stok API'si çağrılmamalıydı.")));
+        var availabilityHttpClient = new HttpClient(availabilityHandler) { BaseAddress = new Uri("https://ofg.hm.com") };
+
         var pdpFetcher = new Mock<IHmPdpFetcher>();
         pdpFetcher.Setup(f => f.FetchProductDataJsonAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(pdpSizesJson);
         pdpFetcher.Setup(f => f.FetchStoreAvailabilityJsonAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<double>(), It.IsAny<double>(), It.IsAny<CancellationToken>()))
@@ -36,32 +42,36 @@ public class HmStockApiClientTests
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int?>(),
             It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<int>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
-        var sut = new HmStockApiClient(pdpFetcher.Object, redis.Object, healthLog.Object, Mock.Of<ILogger<HmStockApiClient>>());
+        var sut = new HmStockApiClient(availabilityHttpClient, pdpFetcher.Object, redis.Object, healthLog.Object, Mock.Of<ILogger<HmStockApiClient>>());
 
-        return (sut, pdpFetcher, redisDb);
+        return (sut, availabilityHandler, pdpFetcher, redisDb);
     }
 
     [Fact]
-    public async Task CheckOnlineStockAsync_WhenAvailable_ReturnsTrueAndCachesResult()
+    public async Task CheckOnlineStockAsync_WhenSkuInAvailabilityList_ReturnsTrueAndCachesSizeMap()
     {
-        var json = SizeJson(("S", "003", true, false));
-        var (sut, pdpFetcher, redisDb) = CreateSut(pdpSizesJson: json);
+        var pdpJson = SizeJson(("S", "003"));
+        var availabilityJson = """{"availability":["1351887001003"],"fewPieceLeft":[]}""";
+        var (sut, handler, pdpFetcher, redisDb) = CreateSut(pdpSizesJson: pdpJson, availabilityResponder: _ => FakeHttpResponses.Json(HttpStatusCode.OK, availabilityJson));
 
         var result = await sut.CheckOnlineStockAsync("1351887/001", "S", ProductUrl, CancellationToken.None);
 
         result!.InStock.Should().BeTrue();
         result.IsLastUnit.Should().BeFalse();
+        result.Quantity.Should().BeNull();
         pdpFetcher.Verify(f => f.FetchProductDataJsonAsync(ProductUrl, It.IsAny<CancellationToken>()), Times.Once);
         redisDb.Invocations.Count(i => i.Method.Name == nameof(IDatabaseAsync.StringSetAsync)).Should().Be(1);
+        handler.RequestedUris.Should().ContainSingle().Which.Should().Contain("/pdh-availability/v1/product/tr/availability/1351887");
     }
 
     [Fact]
-    public async Task CheckOnlineStockAsync_WhenFewPieceLeft_ReturnsTrueWithIsLastUnit()
+    public async Task CheckOnlineStockAsync_WhenSkuInFewPieceLeft_ReturnsTrueWithIsLastUnit()
     {
-        // Faz 6.1 — canlı doğrulandı: "fewPieceLeft" dizisi, "availability" dizisinin bir alt kümesi —
-        // hâlâ satın alınabilir (Available=true) ama az kaldı uyarısı taşıyor.
-        var json = SizeJson(("XS", "002", true, true));
-        var (sut, _, _) = CreateSut(pdpSizesJson: json);
+        // Canlı doğrulandı: "fewPieceLeft" dizisi, "availability" dizisinin bir alt kümesi — hâlâ satın
+        // alınabilir ama az kaldı uyarısı taşıyor.
+        var pdpJson = SizeJson(("XS", "002"));
+        var availabilityJson = """{"availability":["1351887001002"],"fewPieceLeft":["1351887001002"]}""";
+        var (sut, _, _, _) = CreateSut(pdpSizesJson: pdpJson, availabilityResponder: _ => FakeHttpResponses.Json(HttpStatusCode.OK, availabilityJson));
 
         var result = await sut.CheckOnlineStockAsync("1351887/001", "XS", ProductUrl, CancellationToken.None);
 
@@ -71,10 +81,11 @@ public class HmStockApiClientTests
     }
 
     [Fact]
-    public async Task CheckOnlineStockAsync_WhenNotAvailable_ReturnsFalse()
+    public async Task CheckOnlineStockAsync_WhenSkuNotInAvailabilityList_ReturnsFalse()
     {
-        var json = SizeJson(("M", "004", false, false));
-        var (sut, _, _) = CreateSut(pdpSizesJson: json);
+        var pdpJson = SizeJson(("M", "004"));
+        var availabilityJson = """{"availability":["1351887001003"],"fewPieceLeft":[]}""";
+        var (sut, _, _, _) = CreateSut(pdpSizesJson: pdpJson, availabilityResponder: _ => FakeHttpResponses.Json(HttpStatusCode.OK, availabilityJson));
 
         var result = await sut.CheckOnlineStockAsync("1351887/001", "M", ProductUrl, CancellationToken.None);
 
@@ -84,8 +95,9 @@ public class HmStockApiClientTests
     [Fact]
     public async Task CheckOnlineStockAsync_SizeMatchIsCaseInsensitive()
     {
-        var json = SizeJson(("S", "003", true, false));
-        var (sut, _, _) = CreateSut(pdpSizesJson: json);
+        var pdpJson = SizeJson(("S", "003"));
+        var availabilityJson = """{"availability":["1351887001003"],"fewPieceLeft":[]}""";
+        var (sut, _, _, _) = CreateSut(pdpSizesJson: pdpJson, availabilityResponder: _ => FakeHttpResponses.Json(HttpStatusCode.OK, availabilityJson));
 
         var result = await sut.CheckOnlineStockAsync("1351887/001", "s", ProductUrl, CancellationToken.None);
 
@@ -93,20 +105,21 @@ public class HmStockApiClientTests
     }
 
     [Fact]
-    public async Task CheckOnlineStockAsync_WhenSizeNotFoundInResult_ReturnsNull()
+    public async Task CheckOnlineStockAsync_WhenSizeNotFoundInPdpMap_ReturnsNullWithoutCallingAvailabilityApi()
     {
-        var json = SizeJson(("S", "003", true, false));
-        var (sut, _, _) = CreateSut(pdpSizesJson: json);
+        var pdpJson = SizeJson(("S", "003"));
+        var (sut, handler, _, _) = CreateSut(pdpSizesJson: pdpJson);
 
         var result = await sut.CheckOnlineStockAsync("1351887/001", "XXL", ProductUrl, CancellationToken.None);
 
         result.Should().BeNull();
+        handler.RequestedUris.Should().BeEmpty();
     }
 
     [Fact]
     public async Task CheckOnlineStockAsync_WhenPdpFetchFails_ReturnsNullAndDoesNotCache()
     {
-        var (sut, _, redisDb) = CreateSut(pdpSizesJson: null);
+        var (sut, _, _, redisDb) = CreateSut(pdpSizesJson: null);
 
         var result = await sut.CheckOnlineStockAsync("1351887/001", "S", ProductUrl, CancellationToken.None);
 
@@ -117,8 +130,9 @@ public class HmStockApiClientTests
     [Fact]
     public async Task CheckOnlineStockAsync_WhenCacheHit_DoesNotCallPdpFetcher()
     {
-        var cachedJson = "[{\"Name\":\"S\",\"SizeCode\":\"003\",\"Available\":true,\"FewPieceLeft\":false}]";
-        var (sut, pdpFetcher, _) = CreateSut(cachedValue: cachedJson);
+        var cachedJson = "[{\"Name\":\"S\",\"SizeCode\":\"003\"}]";
+        var availabilityJson = """{"availability":["1351887001003"],"fewPieceLeft":[]}""";
+        var (sut, _, pdpFetcher, _) = CreateSut(cachedValue: cachedJson, availabilityResponder: _ => FakeHttpResponses.Json(HttpStatusCode.OK, availabilityJson));
 
         var result = await sut.CheckOnlineStockAsync("1351887/001", "S", ProductUrl, CancellationToken.None);
 
@@ -127,11 +141,22 @@ public class HmStockApiClientTests
     }
 
     [Fact]
+    public async Task CheckOnlineStockAsync_WhenApiReturnsNonSuccess_ReturnsNull()
+    {
+        var pdpJson = SizeJson(("S", "003"));
+        var (sut, _, _, _) = CreateSut(pdpSizesJson: pdpJson, availabilityResponder: _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+
+        var result = await sut.CheckOnlineStockAsync("1351887/001", "S", ProductUrl, CancellationToken.None);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public async Task CheckStoreStockAsync_WhenTrafficLightGreen_ReturnsTrue()
     {
-        var pdpJson = SizeJson(("S", "003", true, false));
+        var pdpJson = SizeJson(("S", "003"));
         var storeJson = """{"stores":[{"storeCode":"TR0030","sizes":{"size":[{"sizeCode":"003","avaiQty":1000,"traffLightInd":"G"}]}}]}""";
-        var (sut, pdpFetcher, _) = CreateSut(pdpSizesJson: pdpJson, storeAvailabilityJson: storeJson);
+        var (sut, _, pdpFetcher, _) = CreateSut(pdpSizesJson: pdpJson, storeAvailabilityJson: storeJson);
 
         var result = await sut.CheckStoreStockAsync("1351887/001", "S", "TR0030", 40.96, 29.08, ProductUrl, CancellationToken.None);
 
@@ -146,9 +171,9 @@ public class HmStockApiClientTests
     [Fact]
     public async Task CheckStoreStockAsync_WhenTrafficLightYellow_ReturnsTrueWithIsLastUnit()
     {
-        var pdpJson = SizeJson(("S", "003", true, false));
+        var pdpJson = SizeJson(("S", "003"));
         var storeJson = """{"stores":[{"storeCode":"TR0030","sizes":{"size":[{"sizeCode":"003","avaiQty":0,"traffLightInd":"Y"}]}}]}""";
-        var (sut, _, _) = CreateSut(pdpSizesJson: pdpJson, storeAvailabilityJson: storeJson);
+        var (sut, _, _, _) = CreateSut(pdpSizesJson: pdpJson, storeAvailabilityJson: storeJson);
 
         var result = await sut.CheckStoreStockAsync("1351887/001", "S", "TR0030", 40.96, 29.08, ProductUrl, CancellationToken.None);
 
@@ -159,9 +184,9 @@ public class HmStockApiClientTests
     [Fact]
     public async Task CheckStoreStockAsync_WhenTrafficLightRed_ReturnsFalse()
     {
-        var pdpJson = SizeJson(("S", "003", true, false));
+        var pdpJson = SizeJson(("S", "003"));
         var storeJson = """{"stores":[{"storeCode":"TR0030","sizes":{"size":[{"sizeCode":"003","avaiQty":0,"traffLightInd":"R"}]}}]}""";
-        var (sut, _, _) = CreateSut(pdpSizesJson: pdpJson, storeAvailabilityJson: storeJson);
+        var (sut, _, _, _) = CreateSut(pdpSizesJson: pdpJson, storeAvailabilityJson: storeJson);
 
         var result = await sut.CheckStoreStockAsync("1351887/001", "S", "TR0030", 40.96, 29.08, ProductUrl, CancellationToken.None);
 
@@ -175,9 +200,9 @@ public class HmStockApiClientTests
         // CANLI VERİYLE DOĞRULANAN DAVRANIŞ (Zara'nın TERSİ): H&M yanıtı seyrek değil, yarıçap içindeki
         // TÜM mağazaları (stoksuz olanlar dahil, açık R ile) döner. Hedef mağaza hiç yoksa bu bir sorgu
         // sorunudur (yanlış yarıçap/koordinat) — "o mağazada yok" değil "bilmiyoruz" anlamına gelir.
-        var pdpJson = SizeJson(("S", "003", true, false));
+        var pdpJson = SizeJson(("S", "003"));
         var storeJson = """{"stores":[{"storeCode":"TR9999","sizes":{"size":[{"sizeCode":"003","avaiQty":1000,"traffLightInd":"G"}]}}]}""";
-        var (sut, _, _) = CreateSut(pdpSizesJson: pdpJson, storeAvailabilityJson: storeJson);
+        var (sut, _, _, _) = CreateSut(pdpSizesJson: pdpJson, storeAvailabilityJson: storeJson);
 
         var result = await sut.CheckStoreStockAsync("1351887/001", "S", "TR0030", 40.96, 29.08, ProductUrl, CancellationToken.None);
 
@@ -187,9 +212,9 @@ public class HmStockApiClientTests
     [Fact]
     public async Task CheckStoreStockAsync_WhenSizeCodeMissingFromStoreEntry_ReturnsUnknown()
     {
-        var pdpJson = SizeJson(("S", "003", true, false));
+        var pdpJson = SizeJson(("S", "003"));
         var storeJson = """{"stores":[{"storeCode":"TR0030","sizes":{"size":[{"sizeCode":"004","avaiQty":1000,"traffLightInd":"G"}]}}]}""";
-        var (sut, _, _) = CreateSut(pdpSizesJson: pdpJson, storeAvailabilityJson: storeJson);
+        var (sut, _, _, _) = CreateSut(pdpSizesJson: pdpJson, storeAvailabilityJson: storeJson);
 
         var result = await sut.CheckStoreStockAsync("1351887/001", "S", "TR0030", 40.96, 29.08, ProductUrl, CancellationToken.None);
 
@@ -199,7 +224,7 @@ public class HmStockApiClientTests
     [Fact]
     public async Task CheckStoreStockAsync_WhenProductCodeMalformed_ReturnsNullWithoutCallingFetcher()
     {
-        var (sut, pdpFetcher, _) = CreateSut();
+        var (sut, _, pdpFetcher, _) = CreateSut();
 
         var result = await sut.CheckStoreStockAsync("not-a-valid-code", "S", "TR0030", 40.96, 29.08, ProductUrl, CancellationToken.None);
 
@@ -211,7 +236,7 @@ public class HmStockApiClientTests
     [Fact]
     public async Task CheckStoreStockAsync_WhenPdpSizeUnresolvable_ReturnsNullWithoutCallingStoreApi()
     {
-        var (sut, pdpFetcher, _) = CreateSut(pdpSizesJson: null);
+        var (sut, _, pdpFetcher, _) = CreateSut(pdpSizesJson: null);
 
         var result = await sut.CheckStoreStockAsync("1351887/001", "S", "TR0030", 40.96, 29.08, ProductUrl, CancellationToken.None);
 
