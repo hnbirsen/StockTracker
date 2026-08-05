@@ -79,6 +79,10 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 
 `massimodutti:pdp-sizes:{productUrl}` → ürün sayfasının `#mdfrontw-state` Angular SSR state'inden okunan tüm bedenlerin listesi (`Name`, `ColorId`, `CatEntryId`, `MastersSizeId`, `IsBuyable`, `BackSoon`), 15 dakikalık TTL — online stok İÇİN, ama aynı zamanda mağaza stok sorgusunun ihtiyaç duyduğu `CatEntryId`/`MastersSizeId` değerlerini de taşıyor. Mağaza stok API'si (`api/storefront/1/stores/.../products/.../available-sizes`) hiç önbelleklenmiyor — Akamai korumasız ve ucuz olduğu için her zaman canlı sorgulanıyor (bkz. `.claude/ARCHITECTURE.md` → Massimo Dutti Scraper).
 
+### Beymen Scraper — Redis ürün özeti cache-aside (kendi veritabanı yok)
+
+`beymen:product-summary:{productCode}` → `sf-api/api/product/{id}/productsummary` yanıtının tamamı (her beden için `inStock`, `stockQuantity`, `variantBarcode`), 15 dakikalık TTL — hem online stok hem mağaza sorgusunun ihtiyaç duyduğu barkod eşlemesi için kullanılıyor. Mağaza stok API'si (`api/store/getstorestock/{barcode}`) hiç önbelleklenmiyor — korumasız ve ucuz olduğu için her zaman canlı sorgulanıyor (bkz. `.claude/ARCHITECTURE.md` → Beymen Scraper). Bu scraper'da Playwright/PDP fetch hiç yok, tüm veri bu iki düz API çağrısından geliyor.
+
 ### Scraper Health Monitoring — Redis, tüm marka scraper'ları arasında paylaşılan (kendi veritabanı yok)
 
 `scraper:health:{scraperName}:log` → her scraper denemesinin (`source`, `success`, `httpStatusCode`, `errorMessage`, `context` — hangi ürün URL'i/mağaza/partnumber üzerinde olduğu, `durationMs`, `timestamp`) `LPUSH` ile eklendiği, `LTRIM` ile son 500 kayıtla sınırlanan capped-list. Bilinçli olarak ayrı bir Postgres DB (`bershka_scraper_db` gibi) yerine bu kullanıldı — bkz. `.claude/ARCHITECTURE.md` → Bershka Scraper → Scraper Health Monitoring, "Tasarım kararı" notu. `StockTracker.Shared.Scraping` projesindeki `IScraperHealthLogService` üzerinden okunur/yazılır; Zara/Pull&Bear gibi gelecek scraper'lar aynı servisi kendi `scraperName`'leriyle çağırarak sıfır ek altyapıyla kullanabilir.
@@ -99,6 +103,7 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 | Mango | `^\d{8}/\d{2}$` | Medium |
 | H&M | `^\d{7}/\d{3}$` | Medium |
 | Massimo Dutti | `^\d{8}/\d{3}$` | Medium |
+| Beymen | `^\d{7}$` | Medium |
 
 > Bershka'nın pattern'i, gerçek bershka.com ürün sayfaları üzerinden doğrulandı (Faz 2.4): önde sıfır + 4 haneli model + 3 haneli varyant + 3 haneli renk kodu (ör. REF `2891/054/426` → `02891054426`), `BershkaStockApiClient`'ın stok API'sine gönderdiği `productCode` ile birebir aynı format. Eski `^\d{7,9}$` deseni doğrulanmamış bir tahmindi.
 >
@@ -109,6 +114,8 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 > H&M'nin pattern'i, gerçek www2.hm.com ürün sayfalarından (`__NEXT_DATA__` → `productId`/`artId`, ürün URL yapısı `productpage.{productId}{artId}.html`) doğrulandı: 7 haneli temel `productId` + 3 haneli `artId` (renk varyantı). **Medium** tutuldu (Zara/Bershka'nın High'ının aksine) — temel format canlı API/URL verisiyle doğrulandı ama fiziksel üründeki etiket formatı (ayraç dahil) henüz çapraz doğrulanmadı, Mango ile aynı gerekçe. `/` ayraçlı bileşik kod, diğer markaların regex'leriyle çakışmayı önlemek için bilinçli olarak seçildi (7+3 hane deseni Bershka'nın 11 haneli ayraçsız deseniyle veya Mango'nun 8+2 deseniyle çakışmıyor).
 >
 > Massimo Dutti'nin pattern'i, gerçek massimodutti.com ürün sayfalarının `#mdfrontw-state` SSR verisinden doğrulandı: `reference` alanı (`"06244810-I2026"`) 8 haneli temel referansı, `colors[].reference` alanı (`"C06244810251-I2026"`) 3 haneli renk kodunu (`colors[].id`) veriyor. **Medium** tutuldu (Zara/Bershka'nın High'ının aksine) — temel format SSR verisiyle kesin ama fiziksel üründeki etiket formatı (ayraç dahil) henüz çapraz doğrulanmadı, Mango/H&M ile aynı gerekçe. 8+3 hane deseni H&M'in 7+3 deseniyle ÇAKIŞMIYOR (ilk grup hane sayısı farklı, regex bunu ayırt ediyor).
+>
+> Beymen'in pattern'i, diğer markalardan FARKLI olarak ayraçsız — renk/varyant `productCode`'un bir parçası değil, tamamen ayrı bir ürün ID'si (`otherColorList` alanı bunu gösteriyor). Gerçek `sf-api/api/product/{id}/productsummary` API'sinden ve ürün URL yapısından (`/tr/p_{slug}_{id}`) doğrulandı, birden fazla gerçek örnekle (1661415, 1884189, 2049912, 1652585, 1937139, ...) 7 hane teyit edildi. **Medium** tutuldu — tek marka örneği üzerinden genellendiği için High'a çıkarılmadı, ama 7 hane diğer markaların (Bershka 11, Pull&Bear 8) desenleriyle ÇAKIŞMIYOR.
 
 ### store_db
 
@@ -172,6 +179,17 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 | Izmir | Bornova | Karşıyaka Rönesans AVM | `12840` | 38.4784351 | 27.0743432 |
 
 > `BrandSpecificStoreId`, Massimo Dutti'nin kendi mağaza bulucu API'sinin (`itxrest/2/bam/store/{storeId}/physical-store`) döndürdüğü gerçek mağaza ID'lerinden (Faz 6.1) — bu API yalnızca mağaza KEŞFİ için kullanıldı (enlem/boylam ile "yakındaki mağazalar" araması yapıyor), gerçek stok sorgusu ise farklı ve daha basit bir API'ye (`api/storefront/1/stores/{storeId}/products/{catEntryId}/available-sizes`) doğrudan bu `BrandSpecificStoreId` ile gidiyor — enlem/boylam çalışma zamanında GEREKMİYOR (Zara'daki gibi, bkz. `.claude/ARCHITECTURE.md` → Massimo Dutti Scraper). Şişli için Cevahir AVM ve Çankaya için Kentpark AVM, Bershka/Zara/H&M'in seçtiği AVM'lerle birebir aynı mağaza; Kadıköy'de ve Bornova'da gerçek bir Massimo Dutti mağazası çıkmadığından, en yakın gerçek eşleşmeler kullanıldı (sırasıyla Hilltown AVM/Maltepe ve Karşıyaka Rönesans AVM). Mağaza bazlı stok sorgusu gerçek sayısal verilerle (`stock` alanı) canlı doğrulandı.
+
+**Seed data:** Beymen — 4 mağaza + koordinat (Faz 6.1, diğer markaların mevcut 4 iliyle eşleşecek şekilde):
+
+| Şehir | İlçe | Mağaza | BrandSpecificStoreId | Latitude | Longitude |
+|---|---|---|---|---|---|
+| Istanbul | Kadikoy | Beymen Suadiye | `Beymen Suadiye` | 40.957216 | 29.087570 |
+| Istanbul | Sisli | Beymen Nişantaşı | `Beymen Nişantaşı` | 41.049605 | 28.992227 |
+| Ankara | Cankaya | Beymen Panora | `Beymen Panora` | 39.84796 | 32.832813 |
+| Izmir | Bornova | Beymen Hilltown İzmir | `Beymen Hilltown İzmir` | 38.478249 | 27.073872 |
+
+> `BrandSpecificStoreId`, diğer markalardan FARKLI olarak sayısal bir ID değil, mağazanın kendi `Name` alanı — Beymen'in `GET /api/store/getstorestock/{barcode}` API'sinde ayrı bir sayısal mağaza ID'si yok, mağazalar isimleriyle döndürülüyor (bkz. `.claude/ARCHITECTURE.md` → Beymen Scraper). Latitude/Longitude API'nin kendi `Coordinate` alanından bilgi amaçlı dolduruldu, çalışma zamanında kullanılmıyor (mağaza sorgusu doğrudan barkod + mağaza adıyla çalışıyor). Kadıköy ve Şişli için gerçek Beymen mağazaları birebir ilçe eşleşmesiyle bulundu; Çankaya için Panora seçildi (Kavaklıdere de bir seçenekti); Bornova'da gerçek bir mağaza çıkmadığından İzmir'deki en yakın gerçek eşleşme Beymen Hilltown İzmir (Karşıyaka — Massimo Dutti'nin Bornova için seçtiğiyle aynı mağaza).
 
 `GET /stores?brandId=&city=&district=` — tüm filtreler opsiyonel, `city`/`district` karşılaştırması case-insensitive, sadece `IsActive=true` kayıtlar döner. `GET /stores/{id}` (Faz 3.2) — tek mağaza, Subscription Service'in Stock Poller'ı `BrandSpecificStoreId` (ve Mango/H&M için `Latitude`/`Longitude`) çözmek için kullanır.
 

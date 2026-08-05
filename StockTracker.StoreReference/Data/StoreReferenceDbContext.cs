@@ -62,11 +62,21 @@ public class StoreReferenceDbContext : DbContext
         // Hilltown AVM (Maltepe) kullanıldı; Bornova'da da gerçek bir mağaza çıkmadı, İzmir'deki en yakın
         // gerçek eşleşme Karşıyaka Rönesans AVM kullanıldı. Mağaza bazlı stok sorgusu gerçek sayısal verilerle
         // canlı doğrulandı.
+        // Beymen mağaza listesi (Faz 6.1) — BrandSpecificStoreId, diğer markalardan FARKLI olarak sayısal bir
+        // ID değil, Beymen'in kendi `GET /api/store/getstorestock/{barcode}` API'sinin döndürdüğü mağazanın
+        // KENDİ `Name` alanı (ör. "Beymen Suadiye") — bu API'de ayrı bir sayısal mağaza ID'si yok. Latitude/
+        // Longitude API'nin kendi `Coordinate` alanından bilgi amaçlı dolduruldu (çalışma zamanında
+        // kullanılmıyor, Zara/Massimo Dutti gibi doğrudan isimle sorgu atılıyor). Kadıköy ve Şişli için
+        // gerçek Beymen mağazaları birebir ilçe eşleşmesiyle bulundu (Suadiye/Kadıköy, Nişantaşı/Şişli);
+        // Çankaya için iki seçenekten (Panora, Kavaklıdere) Panora seçildi; Bornova'da gerçek bir mağaza
+        // çıkmadı, İzmir'deki en yakın gerçek eşleşme Hilltown İzmir (Karşıyaka) kullanıldı (Massimo
+        // Dutti'nin Bornova için seçtiği mağazayla aynı gerekçe/mesafe mantığı).
         var bershkaId = Guid.Parse("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
         var zaraId = Guid.Parse("b2c3d4e5-f6a7-8901-bcde-f12345678901");
         var mangoId = Guid.Parse("d4e5f6a7-b8c9-0123-defa-234567890123");
         var hmId = Guid.Parse("e5f6a7b8-c9d0-1234-eabc-345678901234");
         var massimoDuttiId = Guid.Parse("f6a7b8c9-d0e1-2345-fabc-456789012345");
+        var beymenId = Guid.Parse("a7b8c9d0-e1f2-3456-abcd-567890123456");
         var seedCreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         modelBuilder.Entity<Store>().HasData(
@@ -331,6 +341,62 @@ public class StoreReferenceDbContext : DbContext
                 BrandSpecificStoreId = "12840",
                 Latitude = 38.4784351,
                 Longitude = 27.0743432,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d6666666-0000-0000-0000-000000000001"),
+                BrandId = beymenId,
+                BrandName = "Beymen",
+                City = "Istanbul",
+                District = "Kadikoy",
+                StoreName = "Beymen Suadiye",
+                BrandSpecificStoreId = "Beymen Suadiye",
+                Latitude = 40.957216,
+                Longitude = 29.087570,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d6666666-0000-0000-0000-000000000002"),
+                BrandId = beymenId,
+                BrandName = "Beymen",
+                City = "Istanbul",
+                District = "Sisli",
+                StoreName = "Beymen Nişantaşı",
+                BrandSpecificStoreId = "Beymen Nişantaşı",
+                Latitude = 41.049605,
+                Longitude = 28.992227,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d6666666-0000-0000-0000-000000000003"),
+                BrandId = beymenId,
+                BrandName = "Beymen",
+                City = "Ankara",
+                District = "Cankaya",
+                StoreName = "Beymen Panora",
+                BrandSpecificStoreId = "Beymen Panora",
+                Latitude = 39.84796,
+                Longitude = 32.832813,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d6666666-0000-0000-0000-000000000004"),
+                BrandId = beymenId,
+                BrandName = "Beymen",
+                City = "Izmir",
+                District = "Bornova",
+                StoreName = "Beymen Hilltown İzmir",
+                BrandSpecificStoreId = "Beymen Hilltown İzmir",
+                Latitude = 38.478249,
+                Longitude = 27.073872,
                 IsActive = true,
                 CreatedAt = seedCreatedAt
             }

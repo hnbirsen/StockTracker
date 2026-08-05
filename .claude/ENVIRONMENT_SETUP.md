@@ -83,6 +83,12 @@ BERSHKA_STOCK_API_BASE_URL=https://api.inditex.com
 # .claude/ARCHITECTURE.md > Massimo Dutti Scraper). REDIS_CONNECTION ve yukarıdaki paylaşılan RabbitMQ
 # değişkenleri zaten yeterli. Playwright/Chrome kurulumu GEREKİYOR (yalnızca online stok için) —
 # aşağıdaki bölüme bkz.
+
+# Beymen Scraper — ek bir env var GEREKMİYOR ve Playwright/Chrome kurulumu da GEREKMİYOR. Beymen'in ana
+# sitesi Incapsula korumalı ama gerçek stok API'leri (sf-api/api/product/.../productsummary,
+# api/store/getstorestock/...) TAMAMEN AYRI ve korumasız (bkz. .claude/ARCHITECTURE.md > Beymen Scraper) —
+# düz, dayanıklılık politikalı HttpClient yeterli. REDIS_CONNECTION ve yukarıdaki paylaşılan RabbitMQ
+# değişkenleri zaten yeterli.
 ```
 
 `.env` dosyası `.gitignore`'da olmalı — repoya commit'lenmez. Sadece `.env example` (değersiz, key listesi) repoda tutulur.
@@ -131,6 +137,7 @@ dotnet run --project StockTracker.ZaraScraper      # :5010
 dotnet run --project StockTracker.MangoScraper     # :5011 (Playwright/Chrome kurulumu gerekmez)
 dotnet run --project StockTracker.HmScraper        # :5012 (Playwright/Chrome kurulumu gerekir)
 dotnet run --project StockTracker.MassimoDuttiScraper # :5013 (Playwright/Chrome kurulumu gerekir — yalnızca online stok için)
+dotnet run --project StockTracker.BeymenScraper    # :5014 (Playwright/Chrome kurulumu gerekmez)
 ```
 
 Sadece belirli bir servis üzerinde çalışıyorsan, altyapıyı ayağa kaldırıp o servisi IDE'den debug edebilirsin:
