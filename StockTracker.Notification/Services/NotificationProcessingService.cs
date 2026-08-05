@@ -66,7 +66,7 @@ public class NotificationProcessingService : INotificationProcessingService
         }
 
         var subject = "Ürün tekrar stokta!";
-        var body = $"Takip ettiğiniz ürün ({stockResultEvent.ProductCode}, beden {stockResultEvent.Size}) tekrar stokta.";
+        var body = $"Takip ettiğiniz ürün ({stockResultEvent.ProductCode}, beden {stockResultEvent.Size}) tekrar stokta.{BuildStockDetailSuffix(stockResultEvent)}";
 
         foreach (var userId in watcherUserIds)
         {
@@ -76,6 +76,29 @@ public class NotificationProcessingService : INotificationProcessingService
             await TryNotifyAsync(userId, NotificationChannel.Push, stockResultEvent, cancellationToken,
                 () => SendPushAsync(userId, subject, body, cancellationToken));
         }
+    }
+
+    // Faz 6.1 — kullanıcı talebiyle eklendi: "eğer bu bilgiye erişmişsek mutlaka notification'da kullanıcıya
+    // belirtelim." Scraper'lar StockResultEvent'e Quantity/IsLastUnit'i yalnızca GERÇEKTEN bildiklerinde
+    // dolduruyor (bkz. Shared.Contracts.Messages.V1.StockResultEvent üstündeki yorum — markalar arası veri
+    // şekli farklı: Bershka/Zara sayısal miktar veriyor, Mango API'nin kendi "son ürün" bayrağını). İkisi de
+    // null'sa (ör. online kontrol, ya da markanın API'si hiç bu veriyi vermiyorsa) hiçbir ek metin
+    // eklenmiyor — "bilmiyoruz" ile "bolca stok var" birbirine karıştırılmamalı.
+    private static string BuildStockDetailSuffix(StockResultEvent stockResultEvent)
+    {
+        if (stockResultEvent.IsLastUnit == true)
+        {
+            return stockResultEvent.Quantity.HasValue
+                ? $" Dikkat: yalnızca {stockResultEvent.Quantity} adet kaldı — mağazaya gidene kadar tükenebilir!"
+                : " Dikkat: bu son ürün olabilir — mağazaya gidene kadar tükenebilir!";
+        }
+
+        if (stockResultEvent.Quantity is int quantity)
+        {
+            return $" Stokta {quantity} adet var.";
+        }
+
+        return string.Empty;
     }
 
     private async Task<StockStatus?> UpdateStateAndGetPreviousStatusAsync(StockResultEvent stockResultEvent, CancellationToken cancellationToken)

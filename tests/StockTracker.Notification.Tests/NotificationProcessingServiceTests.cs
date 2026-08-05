@@ -37,8 +37,8 @@ public class NotificationProcessingServiceTests
             Mock.Of<ILogger<NotificationProcessingService>>());
     }
 
-    private static StockResultEvent CreateEvent(StockStatus status, Guid? commandId = null) => new(
-        commandId ?? Guid.NewGuid(), "111", Guid.NewGuid(), "M", null, status, DateTime.UtcNow, "test");
+    private static StockResultEvent CreateEvent(StockStatus status, Guid? commandId = null, int? quantity = null, bool? isLastUnit = null) => new(
+        commandId ?? Guid.NewGuid(), "111", Guid.NewGuid(), "M", null, status, DateTime.UtcNow, "test", quantity, isLastUnit);
 
     [Fact]
     public async Task ProcessAsync_WhenFirstEverCheckIsInStock_DoesNotNotify_BecausePreviousStatusWasUnknown()
@@ -134,6 +134,104 @@ public class NotificationProcessingServiceTests
         var logs = await db.NotificationLogs.ToListAsync();
         logs.Should().HaveCount(2);
         logs.Should().OnlyContain(l => l.Channel == NotificationChannel.Email && l.Success && l.CommandId == evt.CommandId);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenIsLastUnitTrueWithQuantity_IncludesUrgentWarningWithQuantity()
+    {
+        // Faz 6.1 — kullanıcı talebiyle eklendi: Bershka/Zara mağaza sorgusunda quantity=1 ise IsLastUnit
+        // de true olur (scraper tarafında türetiliyor) — kullanıcı mağazaya gidene kadar tükenebileceğini
+        // bilmeli.
+        await using var db = CreateDbContext();
+        db.WatchGroupNotificationStates.Add(new WatchGroupNotificationState
+        {
+            ProductCode = "111", Size = "M", StoreId = null, LastKnownStatus = StockStatus.OutOfStock
+        });
+        await db.SaveChangesAsync();
+
+        var userId = Guid.NewGuid();
+        _subscriptionClient.Setup(c => c.GetWatcherUserIdsAsync("111", "M", null)).ReturnsAsync(new List<Guid> { userId });
+        _identityClient.Setup(c => c.GetUserEmailAsync(userId)).ReturnsAsync("user@example.com");
+
+        var sut = CreateSut(db);
+        await sut.ProcessAsync(CreateEvent(StockStatus.InStock, quantity: 1, isLastUnit: true), CancellationToken.None);
+
+        _emailSender.Verify(s => s.SendAsync(
+            "user@example.com", It.IsAny<string>(),
+            It.Is<string>(body => body.Contains("Dikkat") && body.Contains("1 adet") && body.Contains("tükenebilir")),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenIsLastUnitTrueWithoutQuantity_IncludesUrgentWarningWithoutQuantity()
+    {
+        // Mango'ya özgü: sayısal miktar hiç yok ama API'nin kendi "son ürün" bayrağı var.
+        await using var db = CreateDbContext();
+        db.WatchGroupNotificationStates.Add(new WatchGroupNotificationState
+        {
+            ProductCode = "111", Size = "M", StoreId = null, LastKnownStatus = StockStatus.OutOfStock
+        });
+        await db.SaveChangesAsync();
+
+        var userId = Guid.NewGuid();
+        _subscriptionClient.Setup(c => c.GetWatcherUserIdsAsync("111", "M", null)).ReturnsAsync(new List<Guid> { userId });
+        _identityClient.Setup(c => c.GetUserEmailAsync(userId)).ReturnsAsync("user@example.com");
+
+        var sut = CreateSut(db);
+        await sut.ProcessAsync(CreateEvent(StockStatus.InStock, quantity: null, isLastUnit: true), CancellationToken.None);
+
+        _emailSender.Verify(s => s.SendAsync(
+            "user@example.com", It.IsAny<string>(),
+            It.Is<string>(body => body.Contains("Dikkat") && body.Contains("son ürün") && !body.Contains("adet kaldı")),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenQuantityKnownButNotLastUnit_IncludesPlainQuantityWithoutWarning()
+    {
+        await using var db = CreateDbContext();
+        db.WatchGroupNotificationStates.Add(new WatchGroupNotificationState
+        {
+            ProductCode = "111", Size = "M", StoreId = null, LastKnownStatus = StockStatus.OutOfStock
+        });
+        await db.SaveChangesAsync();
+
+        var userId = Guid.NewGuid();
+        _subscriptionClient.Setup(c => c.GetWatcherUserIdsAsync("111", "M", null)).ReturnsAsync(new List<Guid> { userId });
+        _identityClient.Setup(c => c.GetUserEmailAsync(userId)).ReturnsAsync("user@example.com");
+
+        var sut = CreateSut(db);
+        await sut.ProcessAsync(CreateEvent(StockStatus.InStock, quantity: 5, isLastUnit: false), CancellationToken.None);
+
+        _emailSender.Verify(s => s.SendAsync(
+            "user@example.com", It.IsAny<string>(),
+            It.Is<string>(body => body.Contains("5 adet") && !body.Contains("Dikkat")),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenQuantityAndIsLastUnitBothNull_DoesNotAddStockDetailText()
+    {
+        // Online kontrol ya da markanın API'si bu veriyi hiç vermiyorsa — "bilmiyoruz" ile "bolca stok var"
+        // birbirine karıştırılmamalı, hiçbir ek metin eklenmemeli.
+        await using var db = CreateDbContext();
+        db.WatchGroupNotificationStates.Add(new WatchGroupNotificationState
+        {
+            ProductCode = "111", Size = "M", StoreId = null, LastKnownStatus = StockStatus.OutOfStock
+        });
+        await db.SaveChangesAsync();
+
+        var userId = Guid.NewGuid();
+        _subscriptionClient.Setup(c => c.GetWatcherUserIdsAsync("111", "M", null)).ReturnsAsync(new List<Guid> { userId });
+        _identityClient.Setup(c => c.GetUserEmailAsync(userId)).ReturnsAsync("user@example.com");
+
+        var sut = CreateSut(db);
+        await sut.ProcessAsync(CreateEvent(StockStatus.InStock), CancellationToken.None);
+
+        _emailSender.Verify(s => s.SendAsync(
+            "user@example.com", It.IsAny<string>(),
+            "Takip ettiğiniz ürün (111, beden M) tekrar stokta.",
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
