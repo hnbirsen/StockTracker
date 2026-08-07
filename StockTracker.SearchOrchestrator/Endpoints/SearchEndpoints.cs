@@ -9,8 +9,8 @@ public static class SearchEndpoints
     {
         app.MapPost("/search", async (SearchRequest request, ISearchThrottleService throttle, ISearchOrchestratorService orchestrator) =>
         {
-            if (string.IsNullOrWhiteSpace(request.ProductCode))
-                return Results.BadRequest("Ürün kodu boş olamaz.");
+            if (string.IsNullOrWhiteSpace(request.ProductCode) && string.IsNullOrWhiteSpace(request.ProductUrl))
+                return Results.BadRequest("Ürün kodu veya ürün sayfası linki gerekli.");
 
             if (string.IsNullOrWhiteSpace(request.Size))
                 return Results.BadRequest("Beden boş olamaz.");
@@ -18,7 +18,8 @@ public static class SearchEndpoints
             if (request.UserId == Guid.Empty)
                 return Results.BadRequest("UserId boş olamaz.");
 
-            var acquired = await throttle.TryAcquireAsync(request.UserId, request.ProductCode, request.Size);
+            var throttleKey = request.ProductCode ?? request.ProductUrl!;
+            var acquired = await throttle.TryAcquireAsync(request.UserId, throttleKey, request.Size);
             if (!acquired)
             {
                 return Results.Json(

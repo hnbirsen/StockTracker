@@ -24,6 +24,10 @@ public class ProductDbContext : DbContext
         {
             entity.HasKey(p => p.Id);
             entity.HasIndex(p => p.ProductCode).IsUnique();
+            // URL bazlı arama için (bkz. IProductLookupService.LookupByUrlAsync) — unique DEĞİL, çünkü
+            // teorik olarak aynı ürün sayfası farklı sorgu parametreleriyle (ör. Zara'nın v1/v2'si) birden
+            // fazla kayda denk gelebilir; pratikte nadir ama kısıtlamayı gereksiz sıkı tutmuyoruz.
+            entity.HasIndex(p => p.ProductUrl);
             entity.Property(p => p.ProductCode).IsRequired().HasMaxLength(100);
 
             entity.HasOne(p => p.Brand)

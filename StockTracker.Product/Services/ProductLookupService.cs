@@ -10,6 +10,13 @@ namespace StockTracker.Product.Services;
 public interface IProductLookupService
 {
     Task<ProductLookupResult> LookupAsync(string productCode);
+    // Kullanıcının productCode yerine doğrudan ürün sayfası URL'ini yapıştırdığı arama akışı için —
+    // BrandCodeSignature regex katmanını tamamen atlar (URL zaten markayı kesin olarak belirtiyor,
+    // tahmine gerek yok). Yalnızca DAHA ÖNCE bir şekilde (manuel çözüm, katalog senkronizasyonu vb.)
+    // kaydedilmiş bir ProductBrandMap'i bulur — hiç görülmemiş bir URL için otomatik kod çıkarımı
+    // yapmaz (her markanın PDP'sini çekmeden gerçek ürün kodunu/renk kodunu bilemeyiz, bkz.
+    // .claude/ARCHITECTURE.md ilgili scraper bölümleri).
+    Task<ProductLookupResult?> LookupByUrlAsync(string productUrl);
     Task SaveMappingAsync(string productCode, Guid brandId, ResolvedVia resolvedVia, ConfidenceLevel confidence, string? productUrl = null);
 }
 
@@ -95,6 +102,48 @@ public class ProductLookupService : IProductLookupService
             );
         }
 
+        return result;
+    }
+
+    public async Task<ProductLookupResult?> LookupByUrlAsync(string productUrl)
+    {
+        var url = productUrl.Trim();
+        var cache = _redis.GetDatabase();
+        var cacheKey = $"product:lookup-url:{url}";
+
+        var cached = await cache.StringGetAsync(cacheKey);
+        if (cached.HasValue)
+        {
+            var cachedResult = JsonSerializer.Deserialize<ProductLookupResult>(cached.ToString());
+            if (cachedResult is not null)
+            {
+                await _metrics.RecordHitAsync(cacheKey);
+                return cachedResult with { FromCache = true };
+            }
+        }
+
+        await _metrics.RecordMissAsync(cacheKey);
+
+        var mapping = await _db.ProductBrandMaps
+            .Include(p => p.Brand)
+            .FirstOrDefaultAsync(p => p.ProductUrl == url);
+
+        if (mapping is null) return null;
+
+        var result = new ProductLookupResult(
+            ProductCode: mapping.ProductCode,
+            CodeType: _formatDetector.Detect(mapping.ProductCode),
+            IsResolved: true,
+            BrandId: mapping.BrandId,
+            BrandName: mapping.Brand.Name,
+            ScraperQueueName: mapping.Brand.ScraperQueueName,
+            ProductUrl: mapping.ProductUrl,
+            Confidence: mapping.Confidence,
+            ResolvedVia: mapping.ResolvedVia,
+            FromCache: false
+        );
+
+        await cache.StringSetAsync(cacheKey, JsonSerializer.Serialize(result), _cacheTtl);
         return result;
     }
 

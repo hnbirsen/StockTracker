@@ -108,6 +108,79 @@ public class ProductLookupServiceTests
     }
 
     [Fact]
+    public async Task LookupByUrlAsync_WhenCacheHit_ReturnsCachedResultAndRecordsHit()
+    {
+        await using var db = CreateDbContext();
+        var url = "https://www.oysho.com/tr/test-urun-l36613922";
+        var cached = new ProductLookupResult(
+            "36613922/814", ProductCodeType.BrandSpecific, true, Guid.NewGuid(), "Oysho", "oysho", url, ConfidenceLevel.Medium, ResolvedVia.Manual, false);
+
+        _database
+            .Setup(d => d.StringGetAsync(It.Is<RedisKey>(k => k == $"product:lookup-url:{url}"), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(new RedisValue(JsonSerializer.Serialize(cached)));
+
+        var sut = CreateSut(db);
+        var result = await sut.LookupByUrlAsync(url);
+
+        result!.FromCache.Should().BeTrue();
+        result.BrandName.Should().Be("Oysho");
+        _metrics.Verify(m => m.RecordHitAsync(It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task LookupByUrlAsync_WhenCacheMissAndMappingExists_ReturnsResolvedResultAndCachesIt()
+    {
+        await using var db = CreateDbContext();
+        var url = "https://www.oysho.com/tr/test-urun-l36613922";
+        var brand = new Brand { Name = "Oysho", ScraperQueueName = "oysho" };
+        db.Brands.Add(brand);
+        db.ProductBrandMaps.Add(new ProductBrandMap
+        {
+            ProductCode = "36613922/814",
+            BrandId = brand.Id,
+            Brand = brand,
+            ResolvedVia = ResolvedVia.Manual,
+            Confidence = ConfidenceLevel.Medium,
+            ProductUrl = url
+        });
+        await db.SaveChangesAsync();
+
+        _database
+            .Setup(d => d.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(RedisValue.Null);
+
+        var sut = CreateSut(db);
+        var result = await sut.LookupByUrlAsync(url);
+
+        result.Should().NotBeNull();
+        result!.IsResolved.Should().BeTrue();
+        result.ProductCode.Should().Be("36613922/814");
+        result.BrandName.Should().Be("Oysho");
+
+        _database.Verify(d => d.StringSetAsync(
+            It.Is<RedisKey>(k => k == $"product:lookup-url:{url}"), It.IsAny<RedisValue>(), It.IsAny<Expiration>(), It.IsAny<ValueCondition>(), It.IsAny<CommandFlags>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task LookupByUrlAsync_WhenNoMappingForUrl_ReturnsNullAndDoesNotCache()
+    {
+        await using var db = CreateDbContext();
+
+        _database
+            .Setup(d => d.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(RedisValue.Null);
+
+        var sut = CreateSut(db);
+        var result = await sut.LookupByUrlAsync("https://www.unknown-brand.com/tr/never-seen-product");
+
+        result.Should().BeNull();
+        _database.Verify(d => d.StringSetAsync(
+            It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<Expiration>(), It.IsAny<ValueCondition>(), It.IsAny<CommandFlags>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task SaveMappingAsync_WhenNewMapping_AddsMappingAndInvalidatesCache()
     {
         await using var db = CreateDbContext();

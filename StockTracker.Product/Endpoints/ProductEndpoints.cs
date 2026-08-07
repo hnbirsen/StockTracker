@@ -22,6 +22,17 @@ public static class ProductEndpoints
             return Results.Ok(result);
         });
 
+        // Ürün sayfası URL'i ile marka sorgula (kullanıcı ürün kodu yerine linki yapıştırdığında).
+        // Yalnızca DAHA ÖNCE kaydedilmiş bir eşleme varsa sonuç döner — bkz. IProductLookupService.LookupByUrlAsync.
+        app.MapGet("/lookup-by-url", async (string url, IProductLookupService lookupService) =>
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return Results.BadRequest("URL boş olamaz.");
+
+            var result = await lookupService.LookupByUrlAsync(url);
+            return result is null ? Results.NotFound() : Results.Ok(result);
+        });
+
         // Brand Detection sonucunu kaydet
         app.MapPost("/mappings", async (SaveMappingRequest request, IProductLookupService lookupService) =>
         {

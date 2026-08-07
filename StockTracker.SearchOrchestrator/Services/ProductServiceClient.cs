@@ -7,6 +7,7 @@ namespace StockTracker.SearchOrchestrator.Services;
 public interface IProductServiceClient
 {
     Task<ProductLookupResponse?> LookupAsync(string productCode);
+    Task<ProductLookupResponse?> LookupByUrlAsync(string productUrl);
 }
 
 public class ProductServiceClient : IProductServiceClient
@@ -24,6 +25,14 @@ public class ProductServiceClient : IProductServiceClient
         // "/lookup/{**code}" bir catch-all route — kod slash içerebildiği için (örn. Zara "12345/678/123")
         // burada escape edilmeden, ham segment olarak gönderilir.
         var response = await _httpClient.GetAsync($"/lookup/{productCode}");
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<ProductLookupResponse>(JsonOptions);
+    }
+
+    public async Task<ProductLookupResponse?> LookupByUrlAsync(string productUrl)
+    {
+        var response = await _httpClient.GetAsync($"/lookup-by-url?url={Uri.EscapeDataString(productUrl)}");
         if (!response.IsSuccessStatusCode) return null;
 
         return await response.Content.ReadFromJsonAsync<ProductLookupResponse>(JsonOptions);

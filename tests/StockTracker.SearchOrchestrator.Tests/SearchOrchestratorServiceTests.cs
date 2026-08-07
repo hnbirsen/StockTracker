@@ -38,7 +38,7 @@ public class SearchOrchestratorServiceTests
     [Fact]
     public async Task SearchAsync_WhenBrandAlreadyResolved_SendsCommandAndReturnsQueued()
     {
-        var request = new SearchRequest(Guid.NewGuid(), "1234567", "38", null);
+        var request = new SearchRequest(Guid.NewGuid(), "1234567", null, "38", null);
 
         _productClient
             .Setup(c => c.LookupAsync(request.ProductCode))
@@ -62,7 +62,7 @@ public class SearchOrchestratorServiceTests
     [Fact]
     public async Task SearchAsync_WithMultipleLocations_SendsOneCommandPerLocation()
     {
-        var request = new SearchRequest(Guid.NewGuid(), "1234567", "38", new List<SearchLocationRequest>
+        var request = new SearchRequest(Guid.NewGuid(), "1234567", null, "38", new List<SearchLocationRequest>
         {
             new("Istanbul", "Kadikoy"),
             new("Ankara", "Cankaya")
@@ -87,7 +87,7 @@ public class SearchOrchestratorServiceTests
     [Fact]
     public async Task SearchAsync_WhenBrandUnknownAndNoCandidatesFound_ReturnsBrandUnknownWithoutSending()
     {
-        var request = new SearchRequest(Guid.NewGuid(), "UNKNOWNCODE", "M", null);
+        var request = new SearchRequest(Guid.NewGuid(), "UNKNOWNCODE", null, "M", null);
 
         _productClient
             .Setup(c => c.LookupAsync(request.ProductCode))
@@ -108,7 +108,7 @@ public class SearchOrchestratorServiceTests
     [Fact]
     public async Task SearchAsync_WhenMultipleCandidatesAndStillUnresolvedAfterRecheck_ReturnsCandidatesForManualSelection()
     {
-        var request = new SearchRequest(Guid.NewGuid(), "1234567", "M", null);
+        var request = new SearchRequest(Guid.NewGuid(), "1234567", null, "M", null);
         var candidates = new List<BrandCandidateDto>
         {
             new(Guid.NewGuid(), "Bershka", 2, "^\\d{7,9}$"),
@@ -136,7 +136,7 @@ public class SearchOrchestratorServiceTests
     [Fact]
     public async Task SearchAsync_WhenSingleHighConfidenceCandidateAutoResolvedOnRecheck_SendsCommand()
     {
-        var request = new SearchRequest(Guid.NewGuid(), "1234567", "M", null);
+        var request = new SearchRequest(Guid.NewGuid(), "1234567", null, "M", null);
         var brandId = Guid.NewGuid();
 
         _productClient
@@ -163,7 +163,7 @@ public class SearchOrchestratorServiceTests
     [Fact]
     public async Task SearchAsync_WhenLocationHasNoMatchingStore_SendsCommandWithNullStoreId()
     {
-        var request = new SearchRequest(Guid.NewGuid(), "1234567", "38", new List<SearchLocationRequest>
+        var request = new SearchRequest(Guid.NewGuid(), "1234567", null, "38", new List<SearchLocationRequest>
         {
             new("Antalya", "Muratpasa")
         });
@@ -186,7 +186,7 @@ public class SearchOrchestratorServiceTests
         var brandId = Guid.NewGuid();
         var storeId1 = Guid.NewGuid();
         var storeId2 = Guid.NewGuid();
-        var request = new SearchRequest(Guid.NewGuid(), "1234567", "38", new List<SearchLocationRequest>
+        var request = new SearchRequest(Guid.NewGuid(), "1234567", null, "38", new List<SearchLocationRequest>
         {
             new("Istanbul", "Kadikoy")
         });
@@ -216,5 +216,65 @@ public class SearchOrchestratorServiceTests
         _sendEndpoint.Verify(e => e.Send(
             It.Is<CheckStockCommand>(cmd => cmd.StoreId == storeId2),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SearchAsync_WhenOnlyProductUrlGivenAndAlreadyCatalogued_SendsCommandWithoutCallingBrandDetection()
+    {
+        var url = "https://www.oysho.com/tr/test-urun-l36613922";
+        var request = new SearchRequest(Guid.NewGuid(), null, url, "M", null);
+        var brandId = Guid.NewGuid();
+
+        _productClient
+            .Setup(c => c.LookupByUrlAsync(url))
+            .ReturnsAsync(new ProductLookupResponse("36613922/814", true, brandId, "Oysho", "oysho", url));
+
+        var sut = CreateSut();
+        var response = await sut.SearchAsync(request);
+
+        response.Status.Should().Be("Queued");
+        _sendEndpointProvider.Verify(p => p.GetSendEndpoint(
+            It.Is<Uri>(u => u.ToString() == "queue:stock.check.oysho")), Times.Once);
+        _sendEndpoint.Verify(e => e.Send(
+            It.Is<CheckStockCommand>(cmd => cmd.ProductCode == "36613922/814" && cmd.Size == "M" && cmd.ProductUrl == url),
+            It.IsAny<CancellationToken>()), Times.Once);
+        _productClient.Verify(c => c.LookupAsync(It.IsAny<string>()), Times.Never);
+        _brandDetectionClient.Verify(c => c.ResolveAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SearchAsync_WhenProductUrlNotCataloguedButHostRecognized_ReturnsUrlNotCataloguedWithBrandHint()
+    {
+        var url = "https://www.zara.com/tr/tr/hic-gorulmemis-urun-p99999999.html";
+        var request = new SearchRequest(Guid.NewGuid(), null, url, "M", null);
+
+        _productClient
+            .Setup(c => c.LookupByUrlAsync(url))
+            .ReturnsAsync((ProductLookupResponse?)null);
+
+        var sut = CreateSut();
+        var response = await sut.SearchAsync(request);
+
+        response.Status.Should().Be("UrlNotCatalogued");
+        response.Message.Should().Contain("Zara");
+        _sendEndpointProvider.Verify(p => p.GetSendEndpoint(It.IsAny<Uri>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SearchAsync_WhenProductUrlNotCataloguedAndHostUnrecognized_ReturnsGenericUrlNotCataloguedMessage()
+    {
+        var url = "https://www.some-random-shop.com/product/123";
+        var request = new SearchRequest(Guid.NewGuid(), null, url, "M", null);
+
+        _productClient
+            .Setup(c => c.LookupByUrlAsync(url))
+            .ReturnsAsync((ProductLookupResponse?)null);
+
+        var sut = CreateSut();
+        var response = await sut.SearchAsync(request);
+
+        response.Status.Should().Be("UrlNotCatalogued");
+        response.Message.Should().NotContain("Zara").And.NotContain("Bershka");
+        _sendEndpointProvider.Verify(p => p.GetSendEndpoint(It.IsAny<Uri>()), Times.Never);
     }
 }

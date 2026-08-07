@@ -32,9 +32,38 @@ public class SearchOrchestratorService : ISearchOrchestratorService
         _logger = logger;
     }
 
+    // Bilinen marka domain'leri — yalnızca kullanıcıya "bu ürünü tanıyoruz ama kataloğumuzda henüz yok"
+    // gibi anlamlı bir mesaj vermek için (bkz. SearchAsync altındaki UrlNotCatalogued dalı). Marka TESPİTİ
+    // için kullanılmıyor — o iş zaten LookupByUrlAsync'in bulduğu kayıtta netleşiyor, burası yalnızca
+    // "hiç kaydımız yoksa bile hangi markanın linki olduğunu anlayalım" amaçlı, kesin/regex bir eşleşme değil.
+    private static readonly Dictionary<string, string> KnownBrandHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["bershka.com"] = "Bershka",
+        ["zara.com"] = "Zara",
+        ["pullandbear.com"] = "Pull&Bear",
+        ["mango.com"] = "Mango",
+        ["hm.com"] = "H&M",
+        ["massimodutti.com"] = "Massimo Dutti",
+        ["beymen.com"] = "Beymen",
+        ["stradivarius.com"] = "Stradivarius",
+        ["oysho.com"] = "Oysho"
+    };
+
     public async Task<SearchResponse> SearchAsync(SearchRequest request)
     {
-        var productCode = request.ProductCode.Trim();
+        // Kullanıcı ürün kodu yerine doğrudan ürün sayfası linkini yapıştırdıysa — BrandCodeSignature
+        // regex katmanı tamamen atlanır (URL zaten markayı kesin olarak belirtiyor). Yalnızca DAHA ÖNCE
+        // kaydedilmiş bir eşleme bulunabilir; hiç görülmemiş bir URL için otomatik kod çıkarımı YAPILMAZ
+        // (her markanın gerçek ürün/renk kodunu yalnızca PDP'yi çekerek öğrenebiliyoruz — bkz.
+        // .claude/ARCHITECTURE.md ilgili scraper bölümleri). Bu durumda kullanıcıya "kataloğumuzda henüz
+        // yok" denir — Faz'da planlanan katalog senkronizasyonu (sitemap taraması) tamamlanınca bilinen
+        // her ürünün URL'i zaten kayıtlı olacağı için bu dal giderek daha az tetiklenecek.
+        if (string.IsNullOrWhiteSpace(request.ProductCode) && !string.IsNullOrWhiteSpace(request.ProductUrl))
+        {
+            return await SearchByUrlAsync(request);
+        }
+
+        var productCode = request.ProductCode!.Trim();
         var lookup = await _productClient.LookupAsync(productCode);
 
         if (lookup is null || !lookup.IsResolved)
@@ -68,7 +97,33 @@ public class SearchOrchestratorService : ISearchOrchestratorService
             }
         }
 
-        var searchId = Guid.NewGuid();
+        return await DispatchCheckStockCommandsAsync(lookup, request);
+    }
+
+    private async Task<SearchResponse> SearchByUrlAsync(SearchRequest request)
+    {
+        var url = request.ProductUrl!.Trim();
+        var lookup = await _productClient.LookupByUrlAsync(url);
+
+        if (lookup is null || !lookup.IsResolved)
+        {
+            var recognizedBrand = KnownBrandHosts
+                .FirstOrDefault(kv => url.Contains(kv.Key, StringComparison.OrdinalIgnoreCase)).Value;
+
+            var message = recognizedBrand is not null
+                ? $"Bu linkin {recognizedBrand} ürünü olduğunu tanıyoruz ama kataloğumuzda henüz kayıtlı değil. Lütfen ürün kodunu girerek tekrar deneyin."
+                : "Bu link tanınan markalardan birine ait değil ya da kataloğumuzda henüz kayıtlı değil. Lütfen ürün kodunu girerek tekrar deneyin.";
+
+            return new SearchResponse(Guid.NewGuid(), "UrlNotCatalogued", message, null);
+        }
+
+        return await DispatchCheckStockCommandsAsync(lookup, request);
+    }
+
+    // ProductCode ya da ProductUrl'den çözümlenmiş bir lookup'ı alıp, konum(lar) verilmişse ilgili
+    // mağazalara, verilmemişse yalnızca online kontrol için CheckStockCommand'ları kuyruğa yollar.
+    private async Task<SearchResponse> DispatchCheckStockCommandsAsync(ProductLookupResponse lookup, SearchRequest request)
+    {
         var locations = request.Locations is { Count: > 0 } ? request.Locations : null;
 
         if (locations is null)
@@ -97,7 +152,7 @@ public class SearchOrchestratorService : ISearchOrchestratorService
         }
 
         return new SearchResponse(
-            searchId,
+            Guid.NewGuid(),
             "Queued",
             "İsteğiniz alındı, stok sonucu bildirim ile iletilecek.",
             null
