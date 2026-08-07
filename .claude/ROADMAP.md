@@ -238,13 +238,30 @@ Faz 5 (frontend) tasarım beklerken kullanıcı kararıyla öne alındı — "fa
 - [ ] RabbitMQ backlog senaryosu
 - [ ] Go-live checklist
 
-## Faz 7 — Proxy / IP Rotasyonu (ertelendi — son faz)
+## Faz 7 — Proxy / IP Rotasyonu (AKTİF — kesinleşen bir üretim ihtiyacı, kesinlikle denenecek)
 
-Faz 2.6'dan bilinçli olarak çıkarıldı: gerçek bir IP rotasyonu, farklı çıkış IP'leri sağlayan bir altyapı gerektirir — bu ya ücretli bir proxy sağlayıcısı (Bright Data, Oxylabs, Smartproxy vb.) ya da kendi çok-bölgeli sunucu altyapımız (o da maliyetli) demek. Ücretsiz/public proxy listeleri güvenlik riski taşıyor (trafiği görebilen güvenilmez üçüncü taraflar) ve genelde zaten bloklanmış durumda; Tor ise Akamai gibi sistemler tarafından datacenter IP'lerinden bile daha agresif tespit ediliyor. Kullanıcı kararı: şimdilik hiçbir ücretli servise girilmeyecek, bu faz bir sağlayıcı kararı alınana kadar pasif bekletiliyor.
+**Kök neden kesinleşti (2026-08-07, kullanıcı tarafından ampirik olarak kanıtlandı)**: H&M (`ofg.hm.com` online-stok API'si) ve Stradivarius'un guest-session `access_token` alt sistemi, sabit bir IP'den gelen sürekli/uzun süreli istek trafiğini **zamanla biriktirilen bir itibar puanına** göre engelliyor — bu statik bir IP/ASN yasağı DEĞİL (Bershka/Oysho/Zara-online/Massimo Dutti/Pull&Bear AYNI ortamdan sorunsuz çalışıyor, bkz. `.claude/PENDING_INPUTS.md`). Kanıt: kullanıcı kendi ev IP'sini değiştirdiğinde sorun anında ortadan kalkıyor. Bu, Faz 2.6'da "ücretli sağlayıcı gerektirdiği için erteleniyor" denilen genel proxy/IP rotasyonu ihtiyacından FARKLI ve daha somut bir gerekçe — artık teorik bir ölçeklenme riski değil, iki markada zaten yaşanan gerçek bir üretim sorunu. Bu yüzden faz pasif beklemeden çıkarılıp aktif hale getirildi.
 
-- [ ] Sağlayıcı kararı verildiğinde: `IProxyProvider` soyutlaması + `HttpClientHandler.Proxy` wiring
-- [ ] Proxy sağlığı/rotasyon stratejisi (round-robin, sticky-session vb.) — sağlayıcıya göre değişir
-- [ ] Faz 2.5'teki `IScraperHealthLogService`'e proxy-bazlı başarı oranı ekleme (hangi proxy/IP havuzu daha çok engelleniyor)
+**Neden ücretli kurumsal proxy sağlayıcıları (Bright Data/Oxylabs/Smartproxy) TERCİH EDİLMİYOR**: bunlar GB başına yüksek ücretli ve genelde büyük minimum taahhüt istiyor — bizim ihtiyacımız (yalnızca 2 markanın düşük hacimli, küçük JSON yanıtlı 2 endpoint'i) bu ölçeği gerektirmiyor. Bunun yerine kendi ucuz altyapımızla aynı sonucu elde edeceğiz.
+
+### 1. Kademe — Kendi ucuz VPS havuzumuz (ÖNCELİKLİ, ilk denenecek)
+
+**Mantık**: sorun "IP'nin türü" (datacenter vs rezidansiyel) değil, **tek bir IP'ye düşen istek hacminin zamanla birikmesi** — bu, Bershka/Oysho/Massimo Dutti/Pull&Bear'ın aynı datacenter-benzeri ortam IP'sinden sorunsuz çalışmasından anlaşılıyor. Çözüm: yükü birkaç farklı IP'ye dağıtıp hiçbirinin eşiği aşmasını önlemek.
+
+- [ ] 3-4 adet ucuz VPS kiralanacak — **kasıtlı olarak farklı sağlayıcılardan** (ör. Hetzner, Contabo, DigitalOcean, Vultr), farklı ASN/IP aralığı için (~$3-5/ay/adet, toplam ~$12-20/ay)
+- [ ] Her VPS'e minimal bir forward-proxy relay servisi kurulacak (`StockTracker.ProxyRelay` — `CONNECT` isteğini kabul edip TCP relay yapan ~100 satırlık basit bir servis; opsiyonel Basic Auth/paylaşılan secret ile korunacak, yalnızca bizim sunucumuz kullanabilsin)
+- [ ] `StockTracker.Shared.Scraping/Http`'e `RotatingProxyHandler` eklenecek — mevcut `HostRateLimitingHandler`/`ScraperEtiquetteHandler` zincirine eklenen bir `DelegatingHandler`; her istekte havuzdan bir relay node seçer, 403 alan node'u `BotDetectionCircuitBreaker`'daki gibi geçici olarak devre dışı bırakır
+- [ ] Bu handler yalnızca H&M (`ofg.hm.com` çağrısı) ve Stradivarius'un (guest-token/PDP navigasyonu — Playwright tarafında proxy config'i browser context'ine verilecek) `HttpClient`/Playwright context'lerine eklenecek — diğer 7 marka etkilenmeyecek, onlarda zaten sorun yok
+- [ ] Faz 2.5'teki `IScraperHealthLogService`'e proxy-bazlı başarı oranı eklenecek (hangi relay node daha çok engelleniyor, rotasyon stratejisini buna göre ayarlamak için)
+- [ ] Canlı doğrulama: VM/relay havuzu hazır olunca gerçek H&M/Stradivarius trafiğiyle (nazik, rate-limit'e uygun hızda — geçmiş oturumlardaki gibi ham/hızlı test trafiğiyle YENİ relay node'ları da erken yakmamak için) test edilecek
+
+### 2. Kademe — Yetmezse: kiralık mobil/4G proxy servisi
+
+Eğer 1. Kademe yetersiz kalırsa (WAF'ın gerçekten ASN bazlı, hacimden bağımsız engellediği ortaya çıkarsa): ev tipi bir Raspberry Pi kurmak yerine, SIM+modem'i kendi veri merkezlerinde barındırıp API üzerinden IP rotasyonu sağlayan **kiralık 4G/LTE proxy servisleri** kullanılacak (IP başına ~$25-40/ay, production-grade uptime, kurumsal rezidansiyel proxy sözleşmelerinden çok daha ucuz). Şimdilik değerlendirmeye alınmadı, 1. Kademe'nin sonucuna bağlı.
+
+### 3. Kademe — Yedek: kullandıkça öde (pay-as-you-go) rezidansiyel proxy
+
+Düşük hacimli, minimum taahhütsüz GB-bazlı sağlayıcılar (IPRoyal, Webshare gibi) — bizim gerçek trafiğimiz (2 endpoint, küçük yanıtlar) muhtemelen ayda birkaç dolar tutar. Yalnızca 1. ve 2. Kademe yetersiz kalırsa değerlendirilecek son çare.
 
 ---
 
