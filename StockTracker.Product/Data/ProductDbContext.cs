@@ -51,6 +51,7 @@ public class ProductDbContext : DbContext
         var beymenId = Guid.Parse("a7b8c9d0-e1f2-3456-abcd-567890123456");
         var stradivariusId = Guid.Parse("b8c9d0e1-f2a3-4567-bcde-678901234567");
         var oyshoId = Guid.Parse("c9d0e1f2-a3b4-5678-cdef-789012345678");
+        var maviId = Guid.Parse("d0e1f2a3-b4c5-6789-defa-890123456789");
 
         modelBuilder.Entity<Brand>().HasData(
             new Brand
@@ -131,6 +132,15 @@ public class ProductDbContext : DbContext
                 Name = "Oysho",
                 ScraperQueueName = "oysho",
                 SearchEndpoint = "https://www.oysho.com/tr/search",
+                IsActive = true,
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            },
+            new Brand
+            {
+                Id = maviId,
+                Name = "Mavi",
+                ScraperQueueName = "mavi",
+                SearchEndpoint = "https://www.mavi.com/arama",
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             }

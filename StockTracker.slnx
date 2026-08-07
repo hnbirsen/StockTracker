@@ -11,6 +11,7 @@
   <Project Path="StockTracker.PullBearScraper/StockTracker.PullBearScraper.csproj" />
   <Project Path="StockTracker.StradivariusScraper/StockTracker.StradivariusScraper.csproj" />
   <Project Path="StockTracker.OyshoScraper/StockTracker.OyshoScraper.csproj" />
+  <Project Path="StockTracker.MaviScraper/StockTracker.MaviScraper.csproj" />
   <Project Path="StockTracker.BrandDetection/StockTracker.BrandDetection.csproj" />
   <Project Path="StockTracker.Gateway/StockTracker.Gateway.csproj" />
   <Project Path="StockTracker.Identity/StockTracker.Identity.csproj" />
@@ -33,6 +34,7 @@
   <Project Path="tests/StockTracker.PullBearScraper.Tests/StockTracker.PullBearScraper.Tests.csproj" />
   <Project Path="tests/StockTracker.StradivariusScraper.Tests/StockTracker.StradivariusScraper.Tests.csproj" />
   <Project Path="tests/StockTracker.OyshoScraper.Tests/StockTracker.OyshoScraper.Tests.csproj" />
+  <Project Path="tests/StockTracker.MaviScraper.Tests/StockTracker.MaviScraper.Tests.csproj" />
   <Project Path="tests/StockTracker.Shared.Scraping.Tests/StockTracker.Shared.Scraping.Tests.csproj" />
   <Project Path="tests/StockTracker.Subscription.Tests/StockTracker.Subscription.Tests.csproj" />
   <Project Path="tests/StockTracker.Notification.Tests/StockTracker.Notification.Tests.csproj" />

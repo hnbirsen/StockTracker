@@ -98,6 +98,16 @@ public class StoreReferenceDbContext : DbContext
         // mağaza); Kadıköy'de gerçek bir Oysho mağazası çıkmadı (en yakın sonuç Barbaros/Beşiktaş'taki
         // Palladium'du) — Kadıköy ilçesi sınırları içindeki gerçek eşleşme Bahariye Caddesi mağazası kullanıldı.
         var oyshoId = Guid.Parse("c9d0e1f2-a3b4-5678-cdef-789012345678");
+        // Mavi mağaza listesi (Faz 6.1) — BrandSpecificStoreId, Mavi'nin kendi `/magazalar/get-stores-by-location`
+        // API'sinden (enlem/boylam ile "yakındaki mağazalar" araması) dönen GERÇEK `storeId` değerleri.
+        // Diğer markalardan FARKLI olarak (Zara/Massimo Dutti/Pull&Bear/Stradivarius/Oysho — hepsi doğrudan
+        // storeId ile çalışır) Mavi'nin gerçek stok sorgusu da Mango/H&M gibi çalışma zamanında enlem/boylam
+        // GEREKTİRİYOR (aynı endpoint hem keşif hem sorgu için kullanılıyor) — bu yüzden Latitude/Longitude
+        // de dolduruldu. Şişli için Cevahir AVM, Çankaya için Ankara Kentpark, Bornova için İzmir Forum
+        // (üçü de diğer markalarla birebir aynı AVM); Kadıköy'de gerçek bir Mavi mağazası Palladium'da (diğer
+        // markaların kullandığı Beşiktaş'taki AVM) çıkmadı — Kadıköy ilçesi sınırları içindeki gerçek eşleşme
+        // İçerenköy Carrefour mağazası kullanıldı.
+        var maviId = Guid.Parse("d0e1f2a3-b4c5-6789-defa-890123456789");
         var seedCreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         modelBuilder.Entity<Store>().HasData(
@@ -590,6 +600,62 @@ public class StoreReferenceDbContext : DbContext
                 District = "Bornova",
                 StoreName = "Forum Bornova AVM",
                 BrandSpecificStoreId = "2410",
+                Latitude = 38.45034027,
+                Longitude = 27.2086791,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("e0000000-0000-0000-0000-000000000001"),
+                BrandId = maviId,
+                BrandName = "Mavi",
+                City = "Istanbul",
+                District = "Kadikoy",
+                StoreName = "İçerenköy Carrefour",
+                BrandSpecificStoreId = "505",
+                Latitude = 40.9800391,
+                Longitude = 29.0993434,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("e0000000-0000-0000-0000-000000000002"),
+                BrandId = maviId,
+                BrandName = "Mavi",
+                City = "Istanbul",
+                District = "Sisli",
+                StoreName = "Cevahir AVM",
+                BrandSpecificStoreId = "507",
+                Latitude = 41.063595,
+                Longitude = 28.992115,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("e0000000-0000-0000-0000-000000000003"),
+                BrandId = maviId,
+                BrandName = "Mavi",
+                City = "Ankara",
+                District = "Cankaya",
+                StoreName = "Ankara Kentpark",
+                BrandSpecificStoreId = "823",
+                Latitude = 39.909011,
+                Longitude = 32.77629,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("e0000000-0000-0000-0000-000000000004"),
+                BrandId = maviId,
+                BrandName = "Mavi",
+                City = "Izmir",
+                District = "Bornova",
+                StoreName = "İzmir Forum",
+                BrandSpecificStoreId = "618",
                 Latitude = 38.45034027,
                 Longitude = 27.2086791,
                 IsActive = true,

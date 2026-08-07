@@ -71,6 +71,7 @@ public class BrandDetectionDbContext : DbContext
         var beymenId = Guid.Parse("a7b8c9d0-e1f2-3456-abcd-567890123456");
         var stradivariusId = Guid.Parse("b8c9d0e1-f2a3-4567-bcde-678901234567");
         var oyshoId = Guid.Parse("c9d0e1f2-a3b4-5678-cdef-789012345678");
+        var maviId = Guid.Parse("d0e1f2a3-b4c5-6789-defa-890123456789");
 
         modelBuilder.Entity<BrandCodeSignature>().HasData(
             new BrandCodeSignature
@@ -179,6 +180,26 @@ public class BrandDetectionDbContext : DbContext
                 // BrandDetection Service'in "birden fazla aday → manuel çözüm" akışı devreye girecek — bu
                 // bir hata değil, paylaşılan Inditex ürün kodu konvansiyonunun sonucu. Medium tutuldu — tek
                 // ürün örneği üzerinden genellendi, fiziksel etiket formatı çapraz doğrulanmadı.
+                Confidence = ConfidenceLevel.Medium,
+                IsActive = true,
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            },
+            new BrandCodeSignature
+            {
+                Id = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000000"),
+                BrandId = maviId,
+                BrandName = "Mavi",
+                RegexPattern = @"^\d{7}-[A-Z0-9]{4,6}$",
+                // Mavi'nin ürün kodu, ürün URL yapısından doğrulandı: `/{slug}/p/{styleCode}-{colorCode}`
+                // (ör. "/florida-iconic-puslu-acik-mavi-jean-pantolon/p/1010381-A4216" -> "1010381-A4216").
+                // 7 haneli sayısal styleCode + tire + alfa-nümerik colorCode (gözlemlenen örnekte "A4216",
+                // 1 harf + 4 rakam — güvenli tarafta kalmak için 4-6 karakter aralığı bırakıldı). Diğer
+                // markaların hiçbirinde bu şekilde (sayı-tire-alfanümerik) bir desen yok — çakışma riski
+                // gözlenmedi, Massimo Dutti/Pull&Bear/Oysho'nun `^\d{8}/\d{3}$` deseninden ayrıştırıcı
+                // farklar (ayraç `-` vs `/`, ikinci grup alfa-nümerik vs sayısal, ilk grup 7 vs 8 hane) net.
+                // Mavi diğer markalardan (Inditex/H&M) farklı bir platform (SAP Hybris) olduğu için bu
+                // ayrım sürpriz değil. Tek ürün örneği üzerinden genellendi, fiziksel etiket formatı
+                // çapraz doğrulanmadı — bu yüzden Medium tutuldu.
                 Confidence = ConfidenceLevel.Medium,
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)

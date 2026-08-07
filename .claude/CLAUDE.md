@@ -34,6 +34,7 @@ dotnet run --project StockTracker.BeymenScraper        # :5014
 dotnet run --project StockTracker.PullBearScraper      # :5015
 dotnet run --project StockTracker.StradivariusScraper  # :5016
 dotnet run --project StockTracker.OyshoScraper         # :5017
+dotnet run --project StockTracker.MaviScraper          # :5018
 
 # When working on one service: bring up infra only, run/debug that service from the IDE
 docker compose up -d

@@ -99,6 +99,10 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 
 `oysho:pdp-sizes:{productUrl}` → ürün sayfasının `#oyshoServer-state` script etiketinden okunan tüm bedenlerin listesi (`Name`, `Availability`, `HasFewUnits`, `PartNumber`, `MasterSizeId`, `ColorId`), 15 dakikalık TTL — Bershka ile benzer önbellekleme deseni. Mağaza stok API'si (`api.inditex.com/ocpstiencom-external/...` — Bershka ile BİREBİR AYNI arka uç) hiç önbelleklenmiyor, korumasız ve ucuz olduğu için her zaman canlı sorgulanıyor (bkz. `.claude/ARCHITECTURE.md` → Oysho Scraper).
 
+### Mavi Scraper — Redis PDP cache-aside (kendi veritabanı yok)
+
+`mavi:pdp-sizes:{productUrl}` → ürün sayfasının SSR HTML'ine gömülü `sizeVariantJson` global JS değişkeninden okunan tüm beden/boy kombinasyonlarının listesi (`Size`, `Length`, `Barcode`, `StockLevel`, `StockLevelStatus`), 15 dakikalık TTL. Mağaza stok API'si (`/magazalar/get-stores-by-location`) hiç önbelleklenmiyor — Zara'daki gibi her zaman canlı sorgulanıyor (bkz. `.claude/ARCHITECTURE.md` → Mavi Scraper).
+
 ### Scraper Health Monitoring — Redis, tüm marka scraper'ları arasında paylaşılan (kendi veritabanı yok)
 
 `scraper:health:{scraperName}:log` → her scraper denemesinin (`source`, `success`, `httpStatusCode`, `errorMessage`, `context` — hangi ürün URL'i/mağaza/partnumber üzerinde olduğu, `durationMs`, `timestamp`) `LPUSH` ile eklendiği, `LTRIM` ile son 500 kayıtla sınırlanan capped-list. Bilinçli olarak ayrı bir Postgres DB (`bershka_scraper_db` gibi) yerine bu kullanıldı — bkz. `.claude/ARCHITECTURE.md` → Bershka Scraper → Scraper Health Monitoring, "Tasarım kararı" notu. `StockTracker.Shared.Scraping` projesindeki `IScraperHealthLogService` üzerinden okunur/yazılır; her yeni scraper aynı servisi kendi `scraperName`'iyle çağırarak sıfır ek altyapıyla kullanabilir.
@@ -123,6 +127,7 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 | Pull&Bear | `^\d{8}/\d{3}$` | Medium |
 | Stradivarius | `^\d{8}$` | Medium |
 | Oysho | `^\d{8}/\d{3}$` | Medium |
+| Mavi | `^\d{7}-[A-Z0-9]{4,6}$` | Medium |
 
 > Bershka'nın pattern'i, gerçek bershka.com ürün sayfaları üzerinden doğrulandı (Faz 2.4): önde sıfır + 4 haneli model + 3 haneli varyant + 3 haneli renk kodu (ör. REF `2891/054/426` → `02891054426`), `BershkaStockApiClient`'ın stok API'sine gönderdiği `productCode` ile birebir aynı format. Eski `^\d{7,9}$` deseni doğrulanmamış bir tahmindi.
 >
@@ -141,6 +146,8 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 > Stradivarius'un pattern'i, gerçek stradivarius.com ürün URL yapısından doğrulandı: `/tr/{slug}-l{8haneli}` (ör. `/tr/asimetrik-kareli-midi-elbise-l06383188` → `06383188`). Fiziksel etikette görünen REF (`6383/188/450`) ile ilişkisi `"0" + base(4) + renk(3)` birleşimi. Ayraçsız, düz 8 haneli — Massimo Dutti/Pull&Bear'ın ayraçlı `^\d{8}/\d{3}$` deseniyle ÇAKIŞMIYOR (regex farklı şekil). **Medium** tutuldu — tek marka örneği üzerinden genellendi, Beymen'deki gerekçeyle aynı.
 >
 > Oysho'nun pattern'i, gerçek oysho.com'un `#oyshoServer-state` SSR verisinden (`fullReference`, `colors[].id`) doğrulandı: 8 haneli temel referans + 3 haneli renk kodu (ör. `36613922/814`). **⚠️ BİLİNÇLİ, BELGELENEN ÇAKIŞMA**: bu desen Massimo Dutti VE Pull&Bear'ınkiyle (`^\d{8}/\d{3}$`) BİREBİR AYNI — üç marka da aynı 8+3 ayraçlı Inditex ürün kodu konvansiyonunu paylaşıyor (farklı platformlar olsalar da). Saf regex eşleşmesi üçünü ayırt edemez; BrandDetection Service'in zaten var olan "birden fazla aday → manuel çözüm" akışı devreye girecek — bkz. `.claude/PENDING_INPUTS.md`. Medium tutuldu — tek ürün örneği üzerinden genellendi.
+>
+> Mavi'nin pattern'i, gerçek mavi.com ürün URL yapısından doğrulandı: `/{slug}/p/{styleCode}-{colorCode}` (ör. `/florida-iconic-puslu-acik-mavi-jean-pantolon/p/1010381-A4216` → `1010381-A4216`). 7 haneli sayısal styleCode + tire + alfa-nümerik colorCode — diğer markaların (hepsi Inditex/H&M) hiçbirinde bu şekil yok, çakışma riski gözlenmedi. Mavi, diğer 9 markadan farklı olarak SAP Hybris tabanlı bağımsız bir platform. Medium tutuldu — tek ürün örneği üzerinden genellendi, fiziksel etiket formatı çapraz doğrulanmadı.
 
 ### store_db
 
@@ -249,7 +256,18 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 
 > `BrandSpecificStoreId`, Oysho'nun kendi mağaza bulucu API'sinin (`itxrest/2/bam/store/64009621/physical-store`, yalnızca mağaza keşfi için kullanıldı) döndürdüğü GERÇEK sayısal `physicalStoreId` değerlerinden — gerçek stok sorgusu (`api.inditex.com/ocpstiencom-external/...`, Bershka ile aynı arka uç) doğrudan bu ID ile çalışıyor, enlem/boylam çalışma zamanında GEREKMİYOR. Şişli için Cevahir AVM, Çankaya için Kentpark AVM, Bornova için Forum Bornova AVM (üçü de diğer markalarla birebir aynı mağaza); Kadıköy'de gerçek bir Oysho mağazası çıkmadı (en yakın sonuç Barbaros/Beşiktaş'taki Palladium'du) — Kadıköy ilçesi sınırları içindeki gerçek eşleşme Bahariye Caddesi mağazası kullanıldı.
 
-`GET /stores?brandId=&city=&district=` — tüm filtreler opsiyonel, `city`/`district` karşılaştırması case-insensitive, sadece `IsActive=true` kayıtlar döner. `GET /stores/{id}` (Faz 3.2) — tek mağaza, Subscription Service'in Stock Poller'ı `BrandSpecificStoreId` (ve Mango/H&M için `Latitude`/`Longitude`) çözmek için kullanır.
+**Seed data:** Mavi — 4 mağaza + koordinat (Faz 6.1, diğer markaların mevcut 4 iliyle eşleşecek şekilde, `AddMaviStores` migration):
+
+| Şehir | İlçe | Mağaza | BrandSpecificStoreId | Latitude | Longitude |
+|---|---|---|---|---|---|
+| Istanbul | Kadikoy | İçerenköy Carrefour | `505` | 40.9800391 | 29.0993434 |
+| Istanbul | Sisli | Cevahir AVM | `507` | 41.063595 | 28.992115 |
+| Ankara | Cankaya | Ankara Kentpark | `823` | 39.909011 | 32.77629 |
+| Izmir | Bornova | İzmir Forum | `618` | 38.45034027 | 27.2086791 |
+
+> `BrandSpecificStoreId`, Mavi'nin kendi `/magazalar/get-stores-by-location` API'sinden dönen GERÇEK `storeId` değerlerinden. Diğer markalardan (Zara/Massimo Dutti/Pull&Bear/Stradivarius/Oysho — hepsi doğrudan storeId ile) FARKLI olarak Mavi'nin gerçek stok sorgusu da Mango/H&M gibi çalışma zamanında enlem/boylam GEREKTİRİYOR (aynı endpoint hem keşif hem sorgu için) — bu yüzden `Latitude`/`Longitude` dolduruldu. Şişli için Cevahir AVM, Çankaya için Ankara Kentpark, Bornova için İzmir Forum (üçü de diğer markalarla birebir aynı AVM); Kadıköy'de gerçek bir Mavi mağazası diğer markaların kullandığı Palladium'da (Beşiktaş) çıkmadı — Kadıköy ilçesi sınırları içindeki gerçek eşleşme İçerenköy Carrefour mağazası kullanıldı.
+
+`GET /stores?brandId=&city=&district=` — tüm filtreler opsiyonel, `city`/`district` karşılaştırması case-insensitive, sadece `IsActive=true` kayıtlar döner. `GET /stores/{id}` (Faz 3.2) — tek mağaza, Subscription Service'in Stock Poller'ı `BrandSpecificStoreId` (ve Mango/H&M/Mavi için `Latitude`/`Longitude`) çözmek için kullanır.
 
 ### subscription_db
 

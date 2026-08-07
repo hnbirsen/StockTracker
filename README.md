@@ -70,6 +70,8 @@ flowchart LR
     StradivariusScraper -.-> MQ
     MQ -.-> OyshoScraper[OyshoScraper :5017]
     OyshoScraper -.-> MQ
+    MQ -.-> MaviScraper[MaviScraper :5018]
+    MaviScraper -.-> MQ
 ```
 
 ## Services
@@ -94,6 +96,7 @@ flowchart LR
 | StockTracker.PullBearScraper | 5015 | Consumes `CheckStockCommand`, publishes `StockResultEvent` | ✅ Done — same platform as Massimo Dutti, store-level stock query live-verified with real numeric stock data (see Development Notes below) |
 | StockTracker.StradivariusScraper | 5016 | Consumes `CheckStockCommand`, publishes `StockResultEvent` | ✅ Done — online stock read from SSR HTML via Playwright, store stock via a real unprotected REST API found through user-shared network traffic, verified with real quantities (see Development Notes below) |
 | StockTracker.OyshoScraper | 5017 | Consumes `CheckStockCommand`, publishes `StockResultEvent` | ✅ Done — shares Bershka's exact store-stock API (`api.inditex.com`), online stock read from a server-rendered Angular state script (no hydration/component-tree scan needed), verified with real quantities (see Development Notes below) |
+| StockTracker.MaviScraper | 5018 | Consumes `CheckStockCommand`, publishes `StockResultEvent` | ✅ Done — first non-Inditex/H&M brand (SAP Hybris, Cloudflare-protected), both online and store stock via Playwright, live end-to-end verified on first try with real quantities (see Development Notes below) |
 | StockTracker.Shared.Contracts | — | Shared DTOs, RabbitMQ message contracts (`CheckStockCommand`, `StockResultEvent`) and MassTransit setup | ✅ In use |
 | StockTracker.Shared.Scraping | — | Cross-scraper shared library — Redis-backed `IScraperHealthLogService`, plus `Http/` (host-based token-bucket rate limiting, realistic rotating browser header profiles, Retry-After-aware retry + separate bot-detection circuit breaker) | ✅ In use |
 
@@ -120,6 +123,7 @@ flowchart LR
 | Pull&Bear Scraper (consumer, same platform as Massimo Dutti — Playwright for online stock via `<product-modular>` custom element, plain `HttpClient` for the unprotected store stock API with real quantities, `StockResultEvent` publish) | ✅ Done — store-level stock query live-verified with real numeric stock data |
 | Stradivarius Scraper (consumer, online stock read directly from SSR HTML via Playwright — no polling needed; store stock via a real unprotected REST API — `skus-availability-in-stores/actions/filter` — found through user-shared network traffic, called with a guest-session Bearer token read from cookies during the same PDP visit, `StockResultEvent` publish) | ✅ Done — both online and store-level stock live-verified with real quantities across all 4 target stores |
 | Oysho Scraper (consumer, online stock read from a server-rendered Angular state script (`#oyshoServer-state`) via Playwright — no hydration/component-tree scan needed; store stock via Bershka's EXACT SAME unprotected `api.inditex.com` API, `StockResultEvent` publish) | ✅ Done — store-level stock query live-verified with real numeric stock data across all 4 target stores |
+| Mavi Scraper (consumer, first non-Inditex/H&M brand — SAP Hybris platform behind Cloudflare, both online stock (`sizeVariantJson` embedded in SSR HTML, real quantities) and store stock (`/magazalar/get-stores-by-location`, sparse) read via a single Playwright session, `StockResultEvent` publish) | ✅ Done — compiled production code verified live end-to-end on the first attempt, online + all 4 target stores |
 | Scraper Health Monitoring (`GET /health/scraper-stats`, `GET /health/scraper-failures`, Redis-backed, shared across future scrapers) | ✅ Done |
 | Scraper scalability & bot-detection hardening (host rate limiting, 429/`Retry-After`, bot-detection circuit breaker, realistic header profiles) | ✅ Done — proxy/IP rotation deferred (needs a paid provider, see ROADMAP Faz 7) |
 | Subscription Service (watch groups, dedup, `POST`/`GET`/`DELETE /watches`) | ✅ Done |
@@ -144,7 +148,7 @@ flowchart LR
 | Messaging | RabbitMQ 3 |
 | Password hashing | BCrypt.Net |
 | Authentication | JWT Bearer tokens |
-| Scraping | Playwright (real Chrome channel, Bershka Scraper, Zara Scraper, H&M Scraper, Massimo Dutti Scraper, Pull&Bear Scraper, Stradivarius Scraper, Oysho Scraper) |
+| Scraping | Playwright (real Chrome channel, Bershka Scraper, Zara Scraper, H&M Scraper, Massimo Dutti Scraper, Pull&Bear Scraper, Stradivarius Scraper, Oysho Scraper, Mavi Scraper) |
 | Web frontend | React (planned) |
 | Mobile | React Native + Expo (planned) |
 | Payment | App Store / Play Store in-app purchase (planned) — no separate payment gateway |
@@ -171,7 +175,7 @@ The PostgreSQL init script at `docker/postgres-init/init-multiple-dbs.sh` create
 
 **Pending real-world credentials**: every external integration built so far (own SMTP server, FCM, Apple App Store Server API, Google Play Developer API) is wired against the real protocol/API but currently running on `.env` placeholders — see `.claude/PENDING_INPUTS.md` for the full checklist of accounts/credentials still needed and what happens without them (graceful degrade, not a crash). Note: email intentionally does **not** use a third-party provider (SendGrid/Postmark/SES) — by user decision, it sends via your own SMTP server (MailKit).
 
-**One extra one-time step if you'll run `StockTracker.BershkaScraper`, `StockTracker.ZaraScraper`, `StockTracker.HmScraper`, `StockTracker.MassimoDuttiScraper`, `StockTracker.PullBearScraper`, `StockTracker.StradivariusScraper`, or `StockTracker.OyshoScraper`:** all seven drive a real Chrome via Playwright (see Development Notes below — the bundled Chromium gets blocked, a real Chrome channel is required), and `dotnet restore` does not download the browser binary. Build the project once, then run the Playwright browser install (`chrome` channel, not `chromium`) — see `.claude/ENVIRONMENT_SETUP.md` → "Bershka Scraper — Playwright/Chrome Kurulumu" for exact commands (same install, shared by all seven scrapers). This step isn't visible from a fresh clone because it lands in the gitignored `bin/` folder, so it's easy to miss — do it before your first `dotnet run --project StockTracker.BershkaScraper`, `StockTracker.ZaraScraper`, `StockTracker.HmScraper`, `StockTracker.MassimoDuttiScraper`, `StockTracker.PullBearScraper`, `StockTracker.StradivariusScraper`, or `StockTracker.OyshoScraper`.
+**One extra one-time step if you'll run `StockTracker.BershkaScraper`, `StockTracker.ZaraScraper`, `StockTracker.HmScraper`, `StockTracker.MassimoDuttiScraper`, `StockTracker.PullBearScraper`, `StockTracker.StradivariusScraper`, `StockTracker.OyshoScraper`, or `StockTracker.MaviScraper`:** all eight drive a real Chrome via Playwright (see Development Notes below — the bundled Chromium gets blocked, a real Chrome channel is required), and `dotnet restore` does not download the browser binary. Build the project once, then run the Playwright browser install (`chrome` channel, not `chromium`) — see `.claude/ENVIRONMENT_SETUP.md` → "Bershka Scraper — Playwright/Chrome Kurulumu" for exact commands (same install, shared by all eight scrapers). This step isn't visible from a fresh clone because it lands in the gitignored `bin/` folder, so it's easy to miss — do it before your first `dotnet run --project StockTracker.BershkaScraper`, `StockTracker.ZaraScraper`, `StockTracker.HmScraper`, `StockTracker.MassimoDuttiScraper`, `StockTracker.PullBearScraper`, `StockTracker.StradivariusScraper`, `StockTracker.OyshoScraper`, or `StockTracker.MaviScraper`.
 
 ## Running the Project
 
@@ -196,6 +200,7 @@ dotnet run --project StockTracker.BeymenScraper     # :5014 (RabbitMQ consumer o
 dotnet run --project StockTracker.PullBearScraper   # :5015 (RabbitMQ consumer only, no HTTP endpoints besides /health; requires Playwright/Chrome for online stock, plain HttpClient for store stock)
 dotnet run --project StockTracker.StradivariusScraper # :5016 (RabbitMQ consumer only, no HTTP endpoints besides /health; requires Playwright/Chrome for online stock, plain HttpClient with a Bearer token for store stock)
 dotnet run --project StockTracker.OyshoScraper      # :5017 (RabbitMQ consumer only, no HTTP endpoints besides /health; requires Playwright/Chrome for online stock, plain HttpClient for store stock — shares Bershka's exact store-stock API)
+dotnet run --project StockTracker.MaviScraper       # :5018 (RabbitMQ consumer only, no HTTP endpoints besides /health; requires Playwright/Chrome for BOTH online and store stock — no separate unprotected store API, unlike most other brands)
 ```
 
 When working on a single service, bring up only the infrastructure and run that service from your IDE:
@@ -209,7 +214,7 @@ Health check all services:
 
 ```bash
 curl http://localhost:8000/health/gateway
-for port in 5001 5002 5003 5004 5005 5006 5007 5008 5009 5010 5011 5012 5013 5014 5015 5016 5017; do
+for port in 5001 5002 5003 5004 5005 5006 5007 5008 5009 5010 5011 5012 5013 5014 5015 5016 5017 5018; do
   echo -n ":$port → " && curl -s http://localhost:$port/health
   echo
 done
@@ -432,6 +437,8 @@ Stradivarius Scraper also needs no extra env var — its base URL (`https://www.
 
 Oysho Scraper needs the same `OYSHO_STOCK_API_BASE_URL` treatment as Bershka — it shares the exact same `api.inditex.com` store-stock host, so it gets its own env var pointing at the same URL rather than hardcoding it (see Development Notes below for why the two brands share a backend despite different PDP platforms). Reuses `REDIS_CONNECTION` and shared RabbitMQ env vars.
 
+Mavi Scraper needs no extra env var — its base URL (`https://www.mavi.com`) is hardcoded in `PlaywrightMaviFetcher`, and unlike most other brands there is no separate unprotected store-stock API host to point at: both online and store queries go through the same Playwright-driven browser session against `www.mavi.com` itself (see Development Notes below). Reuses `REDIS_CONNECTION` and shared RabbitMQ env vars.
+
 Copy `.env example` to `.env` and fill in the values. The `.env` file is gitignored.
 
 ## CI
@@ -463,6 +470,8 @@ GitHub Actions workflow at `.github/workflows/ci.yml` runs on every push to `mai
 
 - **Oysho Scraper shares Bershka's exact store-stock backend but a completely different PDP platform** — confirmed live via `#oyshoServer-state`'s own `CONFIG_KEY.productStockPhysicalStoreUrl` field, which points straight at `https://api.inditex.com/ocpstiencom-external/common/1/stock/campaign/$campaign/product/part-number/$partNumber` — byte-for-byte the same endpoint Bershka calls. Unlike Bershka's Nuxt/Vue component-tree scan, Oysho is a server-rendered Angular app: all product data (`colors[].sizes[]` — `availability`, `hasFewUnits`, `partnumber`, `masterSizeId`) is embedded directly as valid JSON inside the `#oyshoServer-state` script tag, so `PlaywrightOyshoFetcher` just waits for that tag to appear in the DOM and reads it — no hydration wait or component-tree walk needed. The store-stock API reproduces Bershka's `sizeId` ≠ `size` distinction exactly (confirmed live: `{"sizeId":8,"size":123,...}`), but one new wrinkle was found here that had never been tested on Bershka: calling it via plain `curl` without `Origin`/`Referer` headers returns a 403 (Akamai Access Denied) even though the endpoint itself is otherwise unprotected — adding those two headers gets a real 200 with real stock data. `store_db` seeding found real Oysho stores matching Cevahir/Kentpark/Forum Bornova (same malls as every other brand) but no real Kadıköy store — the nearest real match was in Barbaros/Beşiktaş, so a real store on Bahariye Caddesi (inside Kadıköy's own district boundaries) was used instead. 24 unit tests pass against a mocked `IOyshoPdpFetcher` and a fake store-stock `HttpClient`; the store-stock endpoint was additionally verified live against `oysho.com` across all 4 target stores with real stock quantities.
 
+- **Mavi Scraper is the first brand outside the Inditex/H&M family — a different platform (SAP Hybris/Accelerator, jQuery-based) and a different WAF (Cloudflare, not Akamai/Incapsula)** — and, unlike every other scraper, both online *and* store stock go through Playwright, since Mavi exposes no separate unprotected stock API host at all (Zara-style, but for both checks rather than just one). Online stock comes from a `window.sizeVariantJson` global embedded directly in the SSR PDP HTML, giving real numeric `stockLevel` per size — richer than most other brands' online data, which usually only expose a boolean. `PlaywrightMaviFetcher` polls for this variable (15×1s) rather than assuming a fixed wait, learned directly from the Oysho/Stradivarius timing bugs earlier in this project — which is why the live end-to-end test passed on the first attempt with zero fixes. Mavi is also the only integrated brand with **two-dimensional sizing** (Width × Length, e.g. jeans `"32/34"`) — `Size` is stored as `"W/L"` or a bare `"W"` when there's no length dimension, and `MaviStockApiClient` splits on `/` to match both fields against `sizeVariantJson` entries independently. The store-stock endpoint (`/magazalar/get-stores-by-location`) was found by reverse-engineering the site's minified JS rather than capturing live UI traffic (the two-dimensional Beden/Boy selector modal kept resetting mid-interaction via browser automation) — the key discovery was that the client calls it via a plain jQuery `$.ajax({url:...})` with no `type` specified, which defaults to **GET**, not POST; a `POST` with the page's CSRF token (the first, reasonable-looking guess) always got redirected to a login page, while a `GET` with just an `X-Requested-With: XMLHttpRequest` header succeeded immediately with real JSON and no CSRF token needed at all. The store response is **sparse** (a store missing from `results` means no stock there, Zara/Mango-style) and, like most store-level checks, carries no exact quantity (`Quantity`/`IsLastUnit` always `null`). All 18 unit tests pass against a mocked `IMaviPdpFetcher`; the compiled scraper was additionally verified live end-to-end against a real `mavi.com` product with real per-size stock quantities.
+
 ## Project Structure
 
 ```text
@@ -490,6 +499,7 @@ GitHub Actions workflow at `.github/workflows/ci.yml` runs on every push to `mai
 ├── StockTracker.PullBearScraper/
 ├── StockTracker.StradivariusScraper/
 ├── StockTracker.OyshoScraper/
+├── StockTracker.MaviScraper/
 ├── StockTracker.Shared.Contracts/
 ├── StockTracker.Shared.Scraping/
 ├── tests/                       # xUnit test projects, one per service
