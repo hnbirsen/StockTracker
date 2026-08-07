@@ -80,10 +80,27 @@ public class PlaywrightStradivariusFetcher : IStradivariusPdpFetcher, IAsyncDisp
             });
             httpStatusCode = response?.Status;
 
-            // SSR HTML'den okunuyor — Massimo Dutti/Pull&Bear'daki hydration polling'ine gerek yok, ama
-            // React'ın ilk render'ının oturması için kısa bir bekleme yine de güvenli. Guest-session
-            // access_token çerezi de sayfa yüklenirken otomatik set ediliyor.
-            await page.WaitForTimeoutAsync(500);
+            // SSR HTML'den okunuyor — Massimo Dutti/Pull&Bear'daki hydration polling'ine gerek yok. ⚠️ Bu
+            // ortamda gerçek Chrome kanalıyla canlı test edilirken bulunan gerçek bir zamanlama hatası:
+            // sabit 500ms bekleme yetersizdi — beden butonları gerçekte ~2 saniyede DOM'a ekleniyor (Akamai
+            // challenge'ının çözülüp gerçek sayfanın render olması bu kadar sürüyor), 500ms'de her zaman 0
+            // buton bulunup Unknown dönüyordu. Sabit bekleme yerine butonun DOM'a eklenmesini (görünür
+            // olmasını değil — State=Attached, çünkü bazı boyut/renk kombinasyonlarında buton görsel olarak
+            // gizli olabilir) bekleyen bir selector kullanılıyor. Guest-session access_token çerezi de sayfa
+            // yüklenirken otomatik set ediliyor.
+            try
+            {
+                await page.WaitForSelectorAsync("button[data-testid=\"size-item\"]", new PageWaitForSelectorOptions
+                {
+                    Timeout = 10000,
+                    State = WaitForSelectorState.Attached
+                });
+            }
+            catch (TimeoutException)
+            {
+                // Ürün gerçekten beden sunmuyor olabilir (ör. tek beden) ya da sayfa engellenmiş olabilir —
+                // aşağıdaki extraction zaten null dönecek, health log'a doğru şekilde yansıyacak.
+            }
             var resultJson = await page.EvaluateAsync<string?>(ExtractOnlineSizesScript);
 
             await _healthLog.LogAttemptAsync(

@@ -70,6 +70,7 @@ public class BrandDetectionDbContext : DbContext
         var massimoDuttiId = Guid.Parse("f6a7b8c9-d0e1-2345-fabc-456789012345");
         var beymenId = Guid.Parse("a7b8c9d0-e1f2-3456-abcd-567890123456");
         var stradivariusId = Guid.Parse("b8c9d0e1-f2a3-4567-bcde-678901234567");
+        var oyshoId = Guid.Parse("c9d0e1f2-a3b4-5678-cdef-789012345678");
 
         modelBuilder.Entity<BrandCodeSignature>().HasData(
             new BrandCodeSignature
@@ -160,6 +161,24 @@ public class BrandDetectionDbContext : DbContext
                 // — ikisi de "^\d{8}/\d{3}$" ayraçlı) ÇAKIŞMIYOR çünkü Stradivarius'ta ayraç yok — ama tek bir
                 // gerçek örnek üzerinden genellendiği ve fiziksel ürün etiketi formatı doğrulanmadığı için
                 // Medium tutuldu (Beymen'deki gerekçeyle aynı).
+                Confidence = ConfidenceLevel.Medium,
+                IsActive = true,
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            },
+            new BrandCodeSignature
+            {
+                Id = Guid.Parse("99999999-9999-9999-9999-999999999999"),
+                BrandId = oyshoId,
+                BrandName = "Oysho",
+                RegexPattern = @"^\d{8}/\d{3}$",
+                // Oysho'nun ürün kodu 8 haneli fullReference / 3 haneli renk kodu (ör. "36613922/814") —
+                // Faz 6.1'de gerçek oysho.com'un #oyshoServer-state SSR verisinden (`fullReference`,
+                // `colors[].id`) doğrulandı. ⚠️ BİLİNÇLİ, BELGELENEN ÇAKIŞMA: bu desen Massimo Dutti VE
+                // Pull&Bear'ınkiyle (ikisi de "^\d{8}/\d{3}$") BİREBİR AYNI — üç marka da aynı 8+3 ayraçlı
+                // şekli kullanıyor (farklı platformlar olsalar da). Saf regex eşleşmesi üçünü ayırt edemez;
+                // BrandDetection Service'in "birden fazla aday → manuel çözüm" akışı devreye girecek — bu
+                // bir hata değil, paylaşılan Inditex ürün kodu konvansiyonunun sonucu. Medium tutuldu — tek
+                // ürün örneği üzerinden genellendi, fiziksel etiket formatı çapraz doğrulanmadı.
                 Confidence = ConfidenceLevel.Medium,
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)

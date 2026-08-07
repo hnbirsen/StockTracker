@@ -95,6 +95,10 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 
 `stradivarius:pdp-data:{productUrl}` → ürün sayfasının SSR HTML'inden okunan tüm bedenlerin listesi (`Name`, `Sku`, `Disabled`, `LowStock`) VE aynı ziyarette okunan guest-session `AccessToken`, 15 dakikalık TTL — Massimo Dutti/Pull&Bear ile benzer önbellekleme deseni (online stok + mağaza sorgusunun ihtiyaç duyduğu değerler tek seferde önbelleğe alınıyor). Mağaza stok API'si (`api/storefront/1/stores/.../skus-availability-in-stores/actions/filter`) hiç önbelleklenmiyor — korumasız ve ucuz olduğu için her zaman canlı sorgulanıyor (bkz. `.claude/ARCHITECTURE.md` → Stradivarius Scraper).
 
+### Oysho Scraper — Redis PDP cache-aside (kendi veritabanı yok)
+
+`oysho:pdp-sizes:{productUrl}` → ürün sayfasının `#oyshoServer-state` script etiketinden okunan tüm bedenlerin listesi (`Name`, `Availability`, `HasFewUnits`, `PartNumber`, `MasterSizeId`, `ColorId`), 15 dakikalık TTL — Bershka ile benzer önbellekleme deseni. Mağaza stok API'si (`api.inditex.com/ocpstiencom-external/...` — Bershka ile BİREBİR AYNI arka uç) hiç önbelleklenmiyor, korumasız ve ucuz olduğu için her zaman canlı sorgulanıyor (bkz. `.claude/ARCHITECTURE.md` → Oysho Scraper).
+
 ### Scraper Health Monitoring — Redis, tüm marka scraper'ları arasında paylaşılan (kendi veritabanı yok)
 
 `scraper:health:{scraperName}:log` → her scraper denemesinin (`source`, `success`, `httpStatusCode`, `errorMessage`, `context` — hangi ürün URL'i/mağaza/partnumber üzerinde olduğu, `durationMs`, `timestamp`) `LPUSH` ile eklendiği, `LTRIM` ile son 500 kayıtla sınırlanan capped-list. Bilinçli olarak ayrı bir Postgres DB (`bershka_scraper_db` gibi) yerine bu kullanıldı — bkz. `.claude/ARCHITECTURE.md` → Bershka Scraper → Scraper Health Monitoring, "Tasarım kararı" notu. `StockTracker.Shared.Scraping` projesindeki `IScraperHealthLogService` üzerinden okunur/yazılır; her yeni scraper aynı servisi kendi `scraperName`'iyle çağırarak sıfır ek altyapıyla kullanabilir.
@@ -118,6 +122,7 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 | Beymen | `^\d{7}$` | Medium |
 | Pull&Bear | `^\d{8}/\d{3}$` | Medium |
 | Stradivarius | `^\d{8}$` | Medium |
+| Oysho | `^\d{8}/\d{3}$` | Medium |
 
 > Bershka'nın pattern'i, gerçek bershka.com ürün sayfaları üzerinden doğrulandı (Faz 2.4): önde sıfır + 4 haneli model + 3 haneli varyant + 3 haneli renk kodu (ör. REF `2891/054/426` → `02891054426`), `BershkaStockApiClient`'ın stok API'sine gönderdiği `productCode` ile birebir aynı format. Eski `^\d{7,9}$` deseni doğrulanmamış bir tahmindi.
 >
@@ -134,6 +139,8 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 > Pull&Bear'ın pattern'i, gerçek pullandbear.com'un `<product-modular>` custom element'inin `__product.detail` verisinden doğrulandı: `reference` alanı (`"07460338-I2026"`) 8 haneli temel referansı, `colors[].reference` alanı (`"C07460338250-I2026"`) 3 haneli renk kodunu veriyor. **⚠️ BİLİNÇLİ, BELGELENEN ÇAKIŞMA**: bu desen Massimo Dutti'ninkiyle (`^\d{8}/\d{3}$`) BİREBİR AYNI — iki marka aynı alt-yapıyı (aynı platform) paylaştığı için. Saf regex tabanlı eşleşme bu iki markayı ayırt edemez; bir kod her ikisiyle de eşleşecek ve BrandDetection Service'in zaten var olan "birden fazla aday → manuel çözüm" akışı devreye girecek — bu bir hata değil, gerçek bir platform-paylaşımı sonucu (bkz. `.claude/PENDING_INPUTS.md`). Medium tutuldu (Massimo Dutti ile aynı gerekçe — fiziksel etiket formatı ayrıca doğrulanmadı; ilginç bir şekilde `displayReference` alanı Zara tarzı `7460/338` formatında görünüyor, ama bu yalnızca görünen etiket, sorgu için kullanılan gerçek kod hâlâ 8+3).
 >
 > Stradivarius'un pattern'i, gerçek stradivarius.com ürün URL yapısından doğrulandı: `/tr/{slug}-l{8haneli}` (ör. `/tr/asimetrik-kareli-midi-elbise-l06383188` → `06383188`). Fiziksel etikette görünen REF (`6383/188/450`) ile ilişkisi `"0" + base(4) + renk(3)` birleşimi. Ayraçsız, düz 8 haneli — Massimo Dutti/Pull&Bear'ın ayraçlı `^\d{8}/\d{3}$` deseniyle ÇAKIŞMIYOR (regex farklı şekil). **Medium** tutuldu — tek marka örneği üzerinden genellendi, Beymen'deki gerekçeyle aynı.
+>
+> Oysho'nun pattern'i, gerçek oysho.com'un `#oyshoServer-state` SSR verisinden (`fullReference`, `colors[].id`) doğrulandı: 8 haneli temel referans + 3 haneli renk kodu (ör. `36613922/814`). **⚠️ BİLİNÇLİ, BELGELENEN ÇAKIŞMA**: bu desen Massimo Dutti VE Pull&Bear'ınkiyle (`^\d{8}/\d{3}$`) BİREBİR AYNI — üç marka da aynı 8+3 ayraçlı Inditex ürün kodu konvansiyonunu paylaşıyor (farklı platformlar olsalar da). Saf regex eşleşmesi üçünü ayırt edemez; BrandDetection Service'in zaten var olan "birden fazla aday → manuel çözüm" akışı devreye girecek — bkz. `.claude/PENDING_INPUTS.md`. Medium tutuldu — tek ürün örneği üzerinden genellendi.
 
 ### store_db
 
@@ -230,6 +237,17 @@ Her servisin kendi PostgreSQL veritabanı vardır, başka bir servisin veritaban
 | Izmir | Bornova | Forum Bornova AVM | `Forum Bornova AVM, Bornova, İzmir` | 38.45034027 | 27.2086791 |
 
 > `BrandSpecificStoreId`, Stradivarius'un kendi mağaza bulucu API'sinin (`itxrest/2/bam/store/54009571/physical-store`, yalnızca mağaza keşfi için kullanıldı) döndürdüğü GERÇEK sayısal mağaza ID'lerinden (Zara/Massimo Dutti/Pull&Bear'daki gibi) — gerçek stok sorgusu (`skus-availability-in-stores/actions/filter`) doğrudan bu ID ile çalışıyor, enlem/boylam çalışma zamanında GEREKMİYOR. Kadıköy için Kozyatağı'ndaki City's AVM (ID `16879`), Şişli için Cevahir AVM (ID `2859`), Çankaya için Kentpark AVM (ID `2968`), Bornova için Forum Bornova AVM (ID `2868`) — 4'ü de Pull&Bear'ınkiyle birebir aynı AVM'ler. ⚠️ **Düzeltme notu**: ilk sürümde (canlı keşfin ilk turunda) mağaza modalının kapalı bir Shadow DOM içinde olduğu ve hiçbir REST API bulunamadığı sonucuna varılmış, `BrandSpecificStoreId` geçici olarak modalın arama kutusuna yazılacak bir metin (ör. `"Cevahir AVM, Şişli, İstanbul"`) olarak tutulmuştu — kullanıcının paylaştığı gerçek `curl` istekleri sayesinde gerçek, korumasız REST API'ler bulununca `UpdateStradivariusStoreIds` migration'ıyla sayısal ID'lere düzeltildi (bkz. `.claude/ARCHITECTURE.md` → Stradivarius Scraper).
+
+**Seed data:** Oysho — 4 mağaza + koordinat (Faz 6.1, diğer markaların mevcut 4 iliyle eşleşecek şekilde, `AddOyshoStores` migration):
+
+| Şehir | İlçe | Mağaza | BrandSpecificStoreId | Latitude | Longitude |
+|---|---|---|---|---|---|
+| Istanbul | Kadikoy | Bahariye Caddesi | `7132` | 40.9800391 | 29.0993434 |
+| Istanbul | Sisli | Cevahir AVM | `2371` | 41.063595 | 28.992115 |
+| Ankara | Cankaya | Kentpark AVM | `7329` | 39.909011 | 32.77629 |
+| Izmir | Bornova | Forum Bornova AVM | `2410` | 38.45034027 | 27.2086791 |
+
+> `BrandSpecificStoreId`, Oysho'nun kendi mağaza bulucu API'sinin (`itxrest/2/bam/store/64009621/physical-store`, yalnızca mağaza keşfi için kullanıldı) döndürdüğü GERÇEK sayısal `physicalStoreId` değerlerinden — gerçek stok sorgusu (`api.inditex.com/ocpstiencom-external/...`, Bershka ile aynı arka uç) doğrudan bu ID ile çalışıyor, enlem/boylam çalışma zamanında GEREKMİYOR. Şişli için Cevahir AVM, Çankaya için Kentpark AVM, Bornova için Forum Bornova AVM (üçü de diğer markalarla birebir aynı mağaza); Kadıköy'de gerçek bir Oysho mağazası çıkmadı (en yakın sonuç Barbaros/Beşiktaş'taki Palladium'du) — Kadıköy ilçesi sınırları içindeki gerçek eşleşme Bahariye Caddesi mağazası kullanıldı.
 
 `GET /stores?brandId=&city=&district=` — tüm filtreler opsiyonel, `city`/`district` karşılaştırması case-insensitive, sadece `IsActive=true` kayıtlar döner. `GET /stores/{id}` (Faz 3.2) — tek mağaza, Subscription Service'in Stock Poller'ı `BrandSpecificStoreId` (ve Mango/H&M için `Latitude`/`Longitude`) çözmek için kullanır.
 

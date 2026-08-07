@@ -26,6 +26,14 @@ dotnet run --project StockTracker.Subscription        # :5006 (planned)
 dotnet run --project StockTracker.Billing             # :5007 (planned)
 dotnet run --project StockTracker.Notification        # :5008 (planned)
 dotnet run --project StockTracker.BershkaScraper      # :5009 (RabbitMQ consumer; real Bershka API not wired yet — see .claude/ARCHITECTURE.md)
+dotnet run --project StockTracker.ZaraScraper          # :5010
+dotnet run --project StockTracker.MangoScraper         # :5011
+dotnet run --project StockTracker.HmScraper            # :5012
+dotnet run --project StockTracker.MassimoDuttiScraper  # :5013
+dotnet run --project StockTracker.BeymenScraper        # :5014
+dotnet run --project StockTracker.PullBearScraper      # :5015
+dotnet run --project StockTracker.StradivariusScraper  # :5016
+dotnet run --project StockTracker.OyshoScraper         # :5017
 
 # When working on one service: bring up infra only, run/debug that service from the IDE
 docker compose up -d

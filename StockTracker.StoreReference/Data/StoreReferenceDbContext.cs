@@ -88,6 +88,16 @@ public class StoreReferenceDbContext : DbContext
         var massimoDuttiId = Guid.Parse("f6a7b8c9-d0e1-2345-fabc-456789012345");
         var beymenId = Guid.Parse("a7b8c9d0-e1f2-3456-abcd-567890123456");
         var stradivariusId = Guid.Parse("b8c9d0e1-f2a3-4567-bcde-678901234567");
+        // Oysho mağaza listesi (Faz 6.1) — BrandSpecificStoreId, Oysho'nun kendi `itxrest/2/bam/store/
+        // 64009621/physical-store` mağaza bulucu API'sinden (enlem/boylam ile "yakındaki mağazalar"
+        // araması, yalnızca KEŞİF için) dönen GERÇEK physicalStoreId değerleri — Bershka/Stradivarius'takiyle
+        // birebir aynı desen. Gerçek stok sorgusu (`api.inditex.com/ocpstiencom-external/...`) çalışma
+        // zamanında bu koordinatlara ihtiyaç duymuyor, doğrudan BrandSpecificStoreId ile çalışıyor. Şişli
+        // için Cevahir AVM (diğer markalarla birebir aynı mağaza), Çankaya için Kentpark AVM (diğer
+        // markalarla birebir aynı mağaza), Bornova için Forum Bornova AVM (diğer markalarla birebir aynı
+        // mağaza); Kadıköy'de gerçek bir Oysho mağazası çıkmadı (en yakın sonuç Barbaros/Beşiktaş'taki
+        // Palladium'du) — Kadıköy ilçesi sınırları içindeki gerçek eşleşme Bahariye Caddesi mağazası kullanıldı.
+        var oyshoId = Guid.Parse("c9d0e1f2-a3b4-5678-cdef-789012345678");
         var seedCreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         modelBuilder.Entity<Store>().HasData(
@@ -524,6 +534,62 @@ public class StoreReferenceDbContext : DbContext
                 District = "Bornova",
                 StoreName = "Forum Bornova AVM",
                 BrandSpecificStoreId = "2868",
+                Latitude = 38.45034027,
+                Longitude = 27.2086791,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d9999999-0000-0000-0000-000000000001"),
+                BrandId = oyshoId,
+                BrandName = "Oysho",
+                City = "Istanbul",
+                District = "Kadikoy",
+                StoreName = "Bahariye Caddesi",
+                BrandSpecificStoreId = "7132",
+                Latitude = 40.9800391,
+                Longitude = 29.0993434,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d9999999-0000-0000-0000-000000000002"),
+                BrandId = oyshoId,
+                BrandName = "Oysho",
+                City = "Istanbul",
+                District = "Sisli",
+                StoreName = "Cevahir AVM",
+                BrandSpecificStoreId = "2371",
+                Latitude = 41.063595,
+                Longitude = 28.992115,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d9999999-0000-0000-0000-000000000003"),
+                BrandId = oyshoId,
+                BrandName = "Oysho",
+                City = "Ankara",
+                District = "Cankaya",
+                StoreName = "Kentpark AVM",
+                BrandSpecificStoreId = "7329",
+                Latitude = 39.909011,
+                Longitude = 32.77629,
+                IsActive = true,
+                CreatedAt = seedCreatedAt
+            },
+            new Store
+            {
+                Id = Guid.Parse("d9999999-0000-0000-0000-000000000004"),
+                BrandId = oyshoId,
+                BrandName = "Oysho",
+                City = "Izmir",
+                District = "Bornova",
+                StoreName = "Forum Bornova AVM",
+                BrandSpecificStoreId = "2410",
                 Latitude = 38.45034027,
                 Longitude = 27.2086791,
                 IsActive = true,
